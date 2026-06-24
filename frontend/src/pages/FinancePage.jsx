@@ -135,7 +135,7 @@ const FinancePage = ({ apiBase, profile, setProfile, logEcosystemActivity }) => 
       {/* Financial Statement Overview Grid */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))',
         gap: '20px',
         marginBottom: '30px'
       }}>
@@ -180,7 +180,7 @@ const FinancePage = ({ apiBase, profile, setProfile, logEcosystemActivity }) => 
       {/* Main Actions: Simpanan Form, Pinjaman Form, and Member Balance */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))',
         gap: '24px'
       }}>
         {profile?.status === 'Admin Koperasi' ? (

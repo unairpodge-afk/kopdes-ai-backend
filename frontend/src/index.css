@@ -320,3 +320,73 @@ h1, h2, h3, h4, h5, h6 {
   0%, 100% { opacity: 0.35; }
   50% { opacity: 0.75; }
 }
+
+/* ─────────────── Mobile UI/UX Global Responsiveness ─────────────── */
+
+@media (max-width: 768px) {
+  /* Smaller paddings on mobile for more space */
+  .glass-card {
+    padding: 16px !important; /* Force smaller padding on mobile */
+  }
+
+  /* Reduce typography sizes */
+  h1 { font-size: 1.8rem; }
+  h2 { font-size: 1.5rem; }
+  h3 { font-size: 1.25rem; }
+  h4 { font-size: 1.1rem; }
+  h5 { font-size: 1rem; }
+  
+  /* Optimize form controls */
+  .form-control {
+    padding: 10px 12px;
+    font-size: 0.9rem;
+  }
+  
+  .btn {
+    padding: 8px 16px;
+    font-size: 0.85rem;
+  }
+}
+
+@media (max-width: 480px) {
+  /* Even smaller paddings on very small screens */
+  .glass-card {
+    padding: 12px !important;
+  }
+  
+  /* Make sure anything inside a flex row wraps effectively if it needs to */
+  .responsive-flex {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+}
+
+/* Global table scroll container */
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Responsive Grid Utilities */
+.responsive-grid-sidebar {
+  display: grid;
+  grid-template-columns: 1fr 350px;
+  gap: 24px;
+  align-items: start;
+}
+
+.responsive-grid-half {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 800px) {
+  .responsive-grid-sidebar {
+    grid-template-columns: 1fr;
+  }
+  .responsive-grid-half {
+    grid-template-columns: 1fr;
+  }
+}

@@ -71,6 +71,9 @@ const DashboardPage = ({ apiBase, profile, navigateTo, subRoute, logEcosystemAct
 
   // Format currency helper
   const formatIDR = (value) => {
+    if (value === undefined || value === null || isNaN(value)) {
+      return 'Rp 0';
+    }
     if (value >= 1e9) {
       return `Rp ${(value / 1e9).toFixed(2)} Milyar`;
     }
@@ -126,7 +129,7 @@ const DashboardPage = ({ apiBase, profile, navigateTo, subRoute, logEcosystemAct
       }}>
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))',
           gap: '24px',
           alignItems: 'center'
         }}>
@@ -197,7 +200,7 @@ const DashboardPage = ({ apiBase, profile, navigateTo, subRoute, logEcosystemAct
       {/* 3. STICKY NOTES STATS GRID */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))',
         gap: '20px',
         marginBottom: '30px'
       }}>
@@ -420,7 +423,7 @@ const DashboardPage = ({ apiBase, profile, navigateTo, subRoute, logEcosystemAct
       {/* 4. MAIN WORKSPACE: CRAYON CHART & CHALKBOARD INSIGHTS */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))',
         gap: '24px',
         marginBottom: '30px'
       }}>

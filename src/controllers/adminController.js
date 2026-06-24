@@ -3,35 +3,6 @@
  * Handles administrator functions for V2.0 (Survey management & Smart Supply Chain)
  */
 const supabase = require('../config/supabaseClient');
-const mockDb = require('../models/mockDb');
-
-// Smart Supply Chain mock database
-const supplyChainShipments = [
-  {
-    id: 'TRK-2026-001',
-    productName: 'Kopi Arabika Gayo',
-    quantity: '200 Kg',
-    destination: 'Distributor Regional Medan',
-    status: 'Pengiriman', // 'Gudang', 'Pengiriman', 'Distribus', 'Selesai'
-    updatedAt: '2026-06-22T08:00:00Z'
-  },
-  {
-    id: 'TRK-2026-002',
-    productName: 'Beras Premium Cianjur',
-    quantity: '500 Kg',
-    destination: 'Gudang Penyaluran Desa',
-    status: 'Gudang',
-    updatedAt: '2026-06-22T10:30:00Z'
-  },
-  {
-    id: 'TRK-2026-003',
-    productName: 'Madu Hutan Liar',
-    quantity: '120 Botol',
-    destination: 'Toko Koperasi Pusat',
-    status: 'Selesai',
-    updatedAt: '2026-06-21T16:00:00Z'
-  }
-];
 
 // 1. Create a new Delphi Survey & Round 1
 const createDelphiSurvey = async (req, res, next) => {
@@ -52,22 +23,26 @@ const createDelphiSurvey = async (req, res, next) => {
         description: description || '',
         current_round: 1,
         max_rounds: maxRounds || 3,
-        is_active: true
-      });
+        is_active: true,
+        status: 'active'
+      })
+      .select()
+      .single();
 
     if (survErr) throw new Error(survErr.message);
-    const newSurvey = survey[0];
 
     // Insert Round 1
     const { data: round, error: roundErr } = await supabase
       .from('delphi_rounds')
       .insert({
-        survey_id: newSurvey.id,
+        survey_id: survey.id,
         round_number: 1,
         question_text: questionText,
         options,
         status: 'open'
-      });
+      })
+      .select()
+      .single();
 
     if (roundErr) throw new Error(roundErr.message);
 
@@ -75,8 +50,8 @@ const createDelphiSurvey = async (req, res, next) => {
       success: true,
       message: 'Delphi survey and Round 1 created successfully.',
       data: {
-        survey: newSurvey,
-        round: round[0]
+        survey,
+        round
       }
     });
   } catch (error) {
@@ -186,7 +161,9 @@ const advanceRound = async (req, res, next) => {
         options: prevRound.options, // keep same options (standard Delphi technique)
         summary_from_previous_round: prevRound.summary_from_previous_round, // Propagate consensus summary
         status: 'open'
-      });
+      })
+      .select()
+      .single();
 
     if (nextRoundErr) throw new Error(nextRoundErr.message);
 
@@ -201,7 +178,7 @@ const advanceRound = async (req, res, next) => {
     res.status(201).json({
       success: true,
       message: `Putaran baru (${nextRoundNumber}) berhasil dibuka.`,
-      data: nextRound[0]
+      data: nextRound
     });
   } catch (error) {
     next(error);
@@ -211,15 +188,9 @@ const advanceRound = async (req, res, next) => {
 // 3.5. Reset/Clear all Delphi Survey data
 const resetDelphiData = async (req, res, next) => {
   try {
-    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
-      mockDb.delphiSurveys = [];
-      mockDb.delphiRounds = [];
-      mockDb.delphiResponses = [];
-    } else {
-      await supabase.from('delphi_responses').delete().neq('id', '');
-      await supabase.from('delphi_rounds').delete().neq('id', '');
-      await supabase.from('delphi_surveys').delete().neq('id', '');
-    }
+    await supabase.from('delphi_responses').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    await supabase.from('delphi_rounds').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    await supabase.from('delphi_surveys').delete().neq('id', '00000000-0000-0000-0000-000000000000');
 
     res.status(200).json({
       success: true,
@@ -230,38 +201,68 @@ const resetDelphiData = async (req, res, next) => {
   }
 };
 
-// 4. Smart Supply Chain list
-const getSupplyChain = (req, res, next) => {
+// 4. Smart Supply Chain list (from Supabase)
+const getSupplyChain = async (req, res, next) => {
   try {
+    const { data: shipments, error } = await supabase
+      .from('supply_chain_shipments')
+      .select('*')
+      .order('updated_at', { ascending: false });
+
+    if (error) throw new Error(error.message);
+
+    // Map to camelCase for frontend compatibility
+    const mapped = (shipments || []).map(s => ({
+      id: s.id,
+      productName: s.product_name,
+      quantity: s.quantity,
+      destination: s.destination,
+      status: s.status,
+      updatedAt: s.updated_at
+    }));
+
     res.status(200).json({
       success: true,
-      count: supplyChainShipments.length,
-      data: supplyChainShipments
+      count: mapped.length,
+      data: mapped
     });
   } catch (error) {
     next(error);
   }
 };
 
-// 5. Update Smart Supply Chain status
-const updateSupplyChain = (req, res, next) => {
+// 5. Update Smart Supply Chain status (in Supabase)
+const updateSupplyChain = async (req, res, next) => {
   try {
     const { id, status } = req.body; // status: 'Gudang', 'Pengiriman', 'Distribusi', 'Selesai'
 
-    const shipment = supplyChainShipments.find(s => s.id === id);
-    if (!shipment) {
-      const error = new Error(`Shipment with ID ${id} not found`);
-      error.statusCode = 404;
-      throw error;
-    }
+    const { data: updated, error } = await supabase
+      .from('supply_chain_shipments')
+      .update({
+        status,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id)
+      .select()
+      .single();
 
-    shipment.status = status;
-    shipment.updatedAt = new Date().toISOString();
+    if (error) {
+      const err = new Error(`Shipment with ID ${id} not found or update failed`);
+      err.statusCode = 404;
+      throw err;
+    }
 
     res.status(200).json({
       success: true,
       message: `Shipment status updated to ${status} successfully.`,
-      data: shipment
+      data: {
+        id: updated.id,
+        productName: updated.product_name,
+        quantity: updated.quantity,
+        destination: updated.destination,
+        status: updated.status,
+        updatedAt: updated.updated_at
+      }
     });
   } catch (error) {
     next(error);

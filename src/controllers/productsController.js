@@ -2,10 +2,10 @@
  * Products Management Controller
  * Handles CRUD operations for admin management of village products
  */
-const { products } = require('../models/mockDb');
+const supabase = require('../config/supabaseClient');
 
 // Create a new product
-const createProduct = (req, res, next) => {
+const createProduct = async (req, res, next) => {
   try {
     const { name, category, price, unit, stock, image, description } = req.body;
 
@@ -15,7 +15,7 @@ const createProduct = (req, res, next) => {
       throw error;
     }
 
-    const newId = `p${products.length + 1}`;
+    const newId = `p${Date.now()}`;
     const newProduct = {
       id: newId,
       name,
@@ -27,12 +27,18 @@ const createProduct = (req, res, next) => {
       description: description || ''
     };
 
-    products.push(newProduct);
+    const { data, error } = await supabase
+      .from('products')
+      .insert(newProduct)
+      .select()
+      .single();
+
+    if (error) throw new Error(error.message);
 
     res.status(201).json({
       success: true,
       message: 'Product added successfully',
-      data: newProduct
+      data: data
     });
   } catch (error) {
     next(error);
@@ -40,31 +46,37 @@ const createProduct = (req, res, next) => {
 };
 
 // Update an existing product
-const updateProduct = (req, res, next) => {
+const updateProduct = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { name, category, price, unit, stock, image, description } = req.body;
 
-    const product = products.find(p => p.id === id);
+    const updates = {};
+    if (name !== undefined) updates.name = name;
+    if (category !== undefined) updates.category = category;
+    if (price !== undefined) updates.price = Number(price);
+    if (unit !== undefined) updates.unit = unit;
+    if (stock !== undefined) updates.stock = Number(stock);
+    if (image !== undefined) updates.image = image;
+    if (description !== undefined) updates.description = description;
 
-    if (!product) {
-      const error = new Error(`Product with ID ${id} not found`);
-      error.statusCode = 404;
-      throw error;
+    const { data, error } = await supabase
+      .from('products')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      const err = new Error(error.message || `Failed to update product with ID ${id}`);
+      err.statusCode = 400;
+      throw err;
     }
-
-    if (name !== undefined) product.name = name;
-    if (category !== undefined) product.category = category;
-    if (price !== undefined) product.price = Number(price);
-    if (unit !== undefined) product.unit = unit;
-    if (stock !== undefined) product.stock = Number(stock);
-    if (image !== undefined) product.image = image;
-    if (description !== undefined) product.description = description;
 
     res.status(200).json({
       success: true,
       message: 'Product updated successfully',
-      data: product
+      data: data
     });
   } catch (error) {
     next(error);
@@ -72,23 +84,27 @@ const updateProduct = (req, res, next) => {
 };
 
 // Delete a product
-const deleteProduct = (req, res, next) => {
+const deleteProduct = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const index = products.findIndex(p => p.id === id);
 
-    if (index === -1) {
-      const error = new Error(`Product with ID ${id} not found`);
-      error.statusCode = 404;
-      throw error;
+    const { data, error } = await supabase
+      .from('products')
+      .delete()
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      const err = new Error(error.message || `Product with ID ${id} not found`);
+      err.statusCode = 404;
+      throw err;
     }
-
-    const deletedProduct = products.splice(index, 1)[0];
 
     res.status(200).json({
       success: true,
       message: 'Product deleted successfully',
-      data: deletedProduct
+      data: data
     });
   } catch (error) {
     next(error);

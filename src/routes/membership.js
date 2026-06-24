@@ -5,11 +5,13 @@ const {
   loginMember,
   getProfile,
   getStats,
-  getAllMembers
+  getAllMembers,
+  sendOTP
 } = require('../controllers/membershipController');
 
 // Authentication / Registration
 router.post('/register', registerMember);
+router.post('/send-otp', sendOTP);
 router.post('/login', loginMember);
 
 // Member profile and stats

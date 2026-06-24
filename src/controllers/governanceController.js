@@ -2,23 +2,28 @@
  * Governance Controller
  * Handles Governance Hub features (Announcements, Electronic Voting, Cooperative Reports)
  */
-const { announcements, votings } = require('../models/mockDb');
+const supabase = require('../config/supabaseClient');
 
-// Get all announcements
-const getAnnouncements = (req, res, next) => {
+const getAnnouncements = async (req, res, next) => {
   try {
+    const { data: announcements, error } = await supabase
+      .from('announcements')
+      .select('*')
+      .order('date', { ascending: false });
+
+    if (error) throw new Error(error.message);
+
     res.status(200).json({
       success: true,
-      count: announcements.length,
-      data: announcements
+      count: announcements ? announcements.length : 0,
+      data: announcements || []
     });
   } catch (error) {
     next(error);
   }
 };
 
-// Create a new announcement (admin function)
-const createAnnouncement = (req, res, next) => {
+const createAnnouncement = async (req, res, next) => {
   try {
     const { title, content, author } = req.body;
 
@@ -29,31 +34,50 @@ const createAnnouncement = (req, res, next) => {
     }
 
     const newAnnouncement = {
-      id: `a${announcements.length + 1}`,
+      id: `a${Date.now()}`,
       title,
       content,
       date: new Date().toISOString().split('T')[0],
       author: author || 'Pengurus Koperasi'
     };
 
-    announcements.unshift(newAnnouncement); // Newest first
+    const { data, error } = await supabase
+      .from('announcements')
+      .insert(newAnnouncement)
+      .select()
+      .single();
+
+    if (error) throw new Error(error.message);
 
     res.status(201).json({
       success: true,
       message: 'Announcement published successfully',
-      data: newAnnouncement
+      data: data
     });
   } catch (error) {
     next(error);
   }
 };
 
-// Get list of active votings
-const getVotings = (req, res, next) => {
+const getVotings = async (req, res, next) => {
   try {
+    const { data: votingsData, error: votingsErr } = await supabase.from('votings').select('*');
+    if (votingsErr) throw new Error(votingsErr.message);
+
+    const { data: optionsData } = await supabase.from('voting_options').select('*');
+    const { data: membersData } = await supabase.from('voting_members').select('*');
+
+    const result = votingsData.map(v => {
+      return {
+        ...v,
+        options: optionsData ? optionsData.filter(o => o.voting_id === v.id) : [],
+        votedMembers: membersData ? membersData.filter(m => m.voting_id === v.id).map(m => m.member_id) : []
+      };
+    });
+
     res.status(200).json({
       success: true,
-      data: votings
+      data: result
     });
   } catch (error) {
     next(error);
@@ -61,7 +85,7 @@ const getVotings = (req, res, next) => {
 };
 
 // Cast a vote in a poll
-const castVote = (req, res, next) => {
+const castVote = async (req, res, next) => {
   try {
     const { votingId, optionId, memberId } = req.body;
 
@@ -71,35 +95,31 @@ const castVote = (req, res, next) => {
       throw error;
     }
 
-    const poll = votings.find(v => v.id === votingId);
-    if (!poll) {
-      const error = new Error(`Voting session with ID ${votingId} not found`);
-      error.statusCode = 404;
-      throw error;
-    }
+    // Check if already voted
+    const { data: existingVote } = await supabase
+      .from('voting_members')
+      .select('*')
+      .eq('voting_id', votingId)
+      .eq('member_id', memberId);
 
-    // Check if member already voted
-    if (poll.votedMembers.includes(memberId)) {
+    if (existingVote && existingVote.length > 0) {
       const error = new Error('You have already cast a vote for this session');
       error.statusCode = 400;
       throw error;
     }
 
-    const option = poll.options.find(o => o.id === optionId);
-    if (!option) {
-      const error = new Error(`Option with ID ${optionId} not found`);
-      error.statusCode = 404;
-      throw error;
-    }
+    // Insert vote record
+    await supabase.from('voting_members').insert({ voting_id: votingId, member_id: memberId });
 
-    // Increment vote count and record voter
-    option.votes += 1;
-    poll.votedMembers.push(memberId);
+    // Increment vote count
+    const { data: optData } = await supabase.from('voting_options').select('votes').eq('id', optionId).single();
+    const currentVotes = optData ? optData.votes : 0;
+    
+    await supabase.from('voting_options').update({ votes: currentVotes + 1 }).eq('id', optionId);
 
     res.status(200).json({
       success: true,
-      message: 'Vote casted successfully',
-      data: poll
+      message: 'Vote casted successfully'
     });
   } catch (error) {
     next(error);

@@ -259,12 +259,7 @@ const DelphiSurveyPage = ({ apiBase, profile, navigateTo }) => {
 
       {error && <div style={{ color: '#ef4444', marginBottom: '20px' }}>{error}</div>}
 
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: '1fr 360px',
-        gap: '30px',
-        alignItems: 'start'
-      }}>
+      <div className="responsive-grid-sidebar">
         {/* MAIN QUESTIONNAIRE AREA */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
           {/* Identity Selection */}

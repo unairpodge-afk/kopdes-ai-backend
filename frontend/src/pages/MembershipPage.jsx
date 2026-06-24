@@ -387,7 +387,7 @@ function MemberTracker({ apiBase, logEcosystemActivity }) {
         </div>
       </div>
 
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(320px, 1fr))', gap:'20px' }}>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(min(100%, 300px), 1fr))', gap:'20px' }}>
         {/* Input Form */}
         <div className="glass-card" style={{ padding:'22px', border:'1px solid rgba(59,130,246,0.15)' }}>
           <form onSubmit={handleTrack}>
@@ -559,7 +559,7 @@ function StatsWidget({ apiBase }) {
     { label: 'Pending', value: stats.pendingMembers?.toLocaleString('id-ID'), icon: '⏳', color: '#f59e0b' },
   ];
   return (
-    <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(110px, 1fr))', gap:'12px', marginBottom:'24px' }}>
+    <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(min(100%, 300px), 1fr))', gap:'12px', marginBottom:'24px' }}>
       {items.map((item) => (
         <div key={item.label} className="glass-card" style={{ padding:'14px 16px', display:'flex', alignItems:'center', gap:'12px' }}>
           <div style={{ fontSize:'1.5rem' }}>{item.icon}</div>
@@ -653,33 +653,79 @@ function RegistrationForm({ apiBase, logEcosystemActivity }) {
   const [err, setErr] = useState('');
   const [newMember, setNewMember] = useState(null);
 
+  const [otp, setOtp] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [countdown, setCountdown] = useState(0);
+  const [receivedOtp, setReceivedOtp] = useState('');
+  const [showMockNotification, setShowMockNotification] = useState(false);
+
+  useEffect(() => {
+    let timer;
+    if (countdown > 0) {
+      timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+    }
+    return () => clearTimeout(timer);
+  }, [countdown]);
+
   const validate = () => {
     if (!name.trim() || !email.trim() || !phone.trim() || !password.trim()) return 'Semua field wajib diisi.';
-    if (!/\S+@\S+\.\S+/.test(email)) return 'Format email tidak valid.';
+    if (!email.toLowerCase().endsWith('@gmail.com')) return 'Registrasi baru wajib menggunakan email Gmail (@gmail.com).';
     if (!/^08\d{8,11}$/.test(phone)) return 'Nomor telepon harus diawali 08 dan 10-13 digit.';
     if (password.length < 6) return 'Password minimal 6 karakter.';
     if (password !== confirmPassword) return 'Konfirmasi password tidak cocok.';
     return null;
   };
 
-  const handleSubmit = async (e) => {
+  const handleSendOTP = async (e) => {
     e.preventDefault();
     setMsg(''); setErr('');
     const validationError = validate();
     if (validationError) { setErr(validationError); return; }
+
+    setOtpLoading(true);
+    try {
+      const res = await fetch(`${apiBase}/membership/send-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setOtpSent(true);
+        setCountdown(60);
+        setReceivedOtp(data.otp);
+        setMsg('Kode OTP berhasil dikirim. Silakan periksa Gmail Anda.');
+        setTimeout(() => setShowMockNotification(true), 1200);
+      } else {
+        setErr(data.error?.message || 'Gagal mengirim OTP.');
+      }
+    } catch {
+      setErr('Gagal terhubung ke server.');
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!otpSent) return handleSendOTP(e);
+
+    setMsg(''); setErr('');
+    if (!otp) { setErr('Kode OTP wajib diisi.'); return; }
 
     setLoading(true);
     try {
       const res = await fetch(`${apiBase}/membership/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, phone, password })
+        body: JSON.stringify({ name, email, phone, password, otp })
       });
       const result = await res.json();
       if (result.success) {
         setMsg(`✅ Anggota berhasil terdaftar dengan ID: ${result.data.id}`);
         setNewMember(result.data);
-        setName(''); setEmail(''); setPhone(''); setPassword(''); setConfirmPassword('');
+        setName(''); setEmail(''); setPhone(''); setPassword(''); setConfirmPassword(''); setOtp(''); setOtpSent(false);
         if (logEcosystemActivity) logEcosystemActivity('MEMBER_REGISTRATION', 'Pendaftaran anggota baru: ' + name, null, 'membership');
       } else {
         setErr(result.error?.message || 'Registrasi gagal.');
@@ -715,28 +761,51 @@ function RegistrationForm({ apiBase, logEcosystemActivity }) {
         </div>
       )}
 
+      {/* MOCK GMAIL NOTIFICATION TOAST */}
+      {showMockNotification && (
+        <div className="gmail-notification-toast animate-slide-down" style={{
+          position: 'fixed', top: '20px', right: '20px', left: '20px', maxWidth: '400px', margin: '0 auto',
+          background: 'rgba(30, 27, 38, 0.95)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '16px',
+          padding: '16px', boxShadow: '0 20px 40px rgba(0,0,0,0.6), 0 0 20px rgba(16, 185, 129, 0.1)',
+          display: 'flex', alignItems: 'center', gap: '14px', zIndex: 9999, backdropFilter: 'blur(12px)'
+        }}>
+          <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'rgba(239, 68, 68, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem' }}>📧</div>
+          <div style={{ flex: 1 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <strong style={{ color: '#ef4444', fontSize: '0.8rem', fontWeight: 700 }}>Gmail</strong>
+              <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>Baru saja</span>
+            </div>
+            <div style={{ fontWeight: 700, fontSize: '0.82rem', color: '#f8fafc', marginTop: '2px' }}>Kopdes OTP Service</div>
+            <div style={{ fontSize: '0.78rem', color: '#cbd5e1', marginTop: '1px' }}>
+              Kode verifikasi Anda adalah <strong style={{ color: '#34d399', fontSize: '0.95rem', fontFamily: 'monospace' }}>{receivedOtp}</strong>.
+            </div>
+          </div>
+          <button onClick={() => setShowMockNotification(false)} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', fontSize: '1.2rem', cursor: 'pointer', padding: '0 4px' }}>✕</button>
+        </div>
+      )}
+
       <form onSubmit={handleSubmit}>
         <div className="form-group">
           <label>Nama Lengkap <span style={{ color:'#ef4444' }}>*</span></label>
-          <input type="text" className="form-control" placeholder="Contoh: Budi Santoso" value={name} onChange={e => setName(e.target.value)} required />
+          <input type="text" className="form-control" placeholder="Contoh: Budi Santoso" value={name} onChange={e => setName(e.target.value)} disabled={otpSent} required />
         </div>
         <div className="form-group">
-          <label>Alamat Email <span style={{ color:'#ef4444' }}>*</span></label>
-          <input type="email" className="form-control" placeholder="Contoh: budi@gmail.com" value={email} onChange={e => setEmail(e.target.value)} required />
+          <label>Alamat Email (Gmail) <span style={{ color:'#ef4444' }}>*</span></label>
+          <input type="email" className="form-control" placeholder="Contoh: budi@gmail.com" value={email} onChange={e => setEmail(e.target.value)} disabled={otpSent} required />
         </div>
         <div className="form-group">
           <label>Nomor Telepon <span style={{ color:'#ef4444' }}>*</span></label>
-          <input type="tel" className="form-control" placeholder="Contoh: 081234567890" value={phone} onChange={e => setPhone(e.target.value)} required />
+          <input type="tel" className="form-control" placeholder="Contoh: 081234567890" value={phone} onChange={e => setPhone(e.target.value)} disabled={otpSent} required />
           <div style={{ fontSize:'0.72rem', color:'var(--text-muted)', marginTop:'4px' }}>Format: 08xxxxxxxxxx (10–13 digit)</div>
         </div>
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px' }}>
           <div className="form-group" style={{ marginBottom:0 }}>
             <label>Password <span style={{ color:'#ef4444' }}>*</span></label>
-            <input type="password" className="form-control" placeholder="Min. 6 karakter" value={password} onChange={e => setPassword(e.target.value)} required />
+            <input type="password" className="form-control" placeholder="Min. 6 karakter" value={password} onChange={e => setPassword(e.target.value)} disabled={otpSent} required />
           </div>
           <div className="form-group" style={{ marginBottom:0 }}>
             <label>Konfirmasi Password <span style={{ color:'#ef4444' }}>*</span></label>
-            <input type="password" className="form-control" placeholder="Ulangi password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required />
+            <input type="password" className="form-control" placeholder="Ulangi password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} disabled={otpSent} required />
           </div>
         </div>
 
@@ -763,17 +832,47 @@ function RegistrationForm({ apiBase, logEcosystemActivity }) {
           </div>
         )}
 
+        {/* OTP Input (Only shows up when OTP is sent) */}
+        {otpSent && (
+          <div className="form-group animate-fade" style={{ marginTop: '16px', padding: '16px', background: 'rgba(16, 185, 129, 0.05)', border: '1px dashed rgba(16, 185, 129, 0.3)', borderRadius: '8px' }}>
+            <label style={{ fontSize: '0.85rem', color: '#34d399', fontWeight: 700 }}>🔒 Masukkan 6-Digit Kode OTP</label>
+            <input type="text" className="form-control" style={{ background: 'rgba(0,0,0,0.5)', color: '#34d399', fontSize: '1.5rem', textAlign: 'center', letterSpacing: '8px', fontFamily: 'monospace', fontWeight: 700, marginTop: '8px', height: '48px' }} placeholder="XXXXXX" maxLength={6} value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))} required />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px', fontSize: '0.75rem' }}>
+              <span style={{ color: 'var(--text-muted)' }}>Tidak menerima kode?</span>
+              {countdown > 0 ? (
+                <span style={{ color: '#fbbf24', fontWeight: 600 }}>Kirim ulang dalam {countdown}s</span>
+              ) : (
+                <button type="button" onClick={handleSendOTP} style={{ background: 'transparent', border: 'none', color: '#60a5fa', fontWeight: 700, cursor: 'pointer', padding: 0 }}>Kirim Ulang OTP</button>
+              )}
+            </div>
+          </div>
+        )}
+
         {err && (
           <div style={{ background:'rgba(239,68,68,0.08)', border:'1px solid rgba(239,68,68,0.2)', borderRadius:'8px', padding:'10px 14px', color:'#fca5a5', fontSize:'0.82rem', margin:'12px 0', fontWeight:600 }}>
             ⚠️ {err}
           </div>
         )}
+        
+        {msg && !newMember && (
+          <div style={{ background:'rgba(16,185,129,0.08)', border:'1px solid rgba(16,185,129,0.2)', borderRadius:'8px', padding:'10px 14px', color:'#34d399', fontSize:'0.82rem', margin:'12px 0', fontWeight:600 }}>
+            ✓ {msg}
+          </div>
+        )}
 
-        <button type="submit" className="btn btn-green" style={{ width:'100%', marginTop:'14px', height:'46px', fontSize:'0.95rem', gap:'8px' }} disabled={loading}>
-          {loading ? (
-            <><span style={{ display:'inline-block', width:'16px', height:'16px', border:'2px solid rgba(255,255,255,0.3)', borderTopColor:'white', borderRadius:'50%', animation:'spin 0.8s linear infinite' }} /> Mendaftarkan...</>
-          ) : '🌾 Daftar Anggota Koperasi'}
-        </button>
+        {!otpSent ? (
+          <button type="submit" className="btn btn-green" style={{ width:'100%', marginTop:'14px', height:'46px', fontSize:'0.95rem', gap:'8px' }} disabled={otpLoading}>
+            {otpLoading ? (
+              <><span style={{ display:'inline-block', width:'16px', height:'16px', border:'2px solid rgba(255,255,255,0.3)', borderTopColor:'white', borderRadius:'50%', animation:'spin 0.8s linear infinite' }} /> Mengirim OTP...</>
+            ) : 'Kirim Kode OTP Realtime'}
+          </button>
+        ) : (
+          <button type="submit" className="btn btn-green" style={{ width:'100%', marginTop:'14px', height:'46px', fontSize:'0.95rem', gap:'8px', background: 'linear-gradient(135deg, #10b981, #059669)' }} disabled={loading}>
+            {loading ? (
+              <><span style={{ display:'inline-block', width:'16px', height:'16px', border:'2px solid rgba(255,255,255,0.3)', borderTopColor:'white', borderRadius:'50%', animation:'spin 0.8s linear infinite' }} /> Memverifikasi...</>
+            ) : '🌾 Verifikasi & Daftar Koperasi'}
+          </button>
+        )}
       </form>
 
       <div style={{ marginTop:'16px', padding:'12px', background:'rgba(255,255,255,0.02)', borderRadius:'8px', border:'1px solid var(--border-light)' }}>
@@ -927,8 +1026,8 @@ const MembershipPage = ({ apiBase, profile, setProfile, logEcosystemActivity }) 
       {/* Stats */}
       <StatsWidget apiBase={apiBase} />
 
-      {/* Member Tracker — full-width, always visible */}
-      <MemberTracker apiBase={apiBase} logEcosystemActivity={logEcosystemActivity} />
+      {/* Member Tracker — Admin Only */}
+      {isAdmin && <MemberTracker apiBase={apiBase} logEcosystemActivity={logEcosystemActivity} />}
 
       {/* Divider */}
       <div style={{ borderTop:'1px solid var(--border-light)', marginBottom:'28px', position:'relative' }}>
@@ -938,7 +1037,7 @@ const MembershipPage = ({ apiBase, profile, setProfile, logEcosystemActivity }) 
       {/* Admin: Member Search */}
       {isAdmin && <MemberSearch apiBase={apiBase} isAdmin={isAdmin} onSelectMember={handleSelectMember} />}
 
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(340px, 1fr))', gap:'28px' }}>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(min(100%, 300px), 1fr))', gap:'28px' }}>
         {/* Left: E-KTA Card */}
         <div>
           <h3 style={{ fontSize:'1rem', fontWeight:700, marginBottom:'14px', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.06em' }}>
@@ -966,35 +1065,37 @@ const MembershipPage = ({ apiBase, profile, setProfile, logEcosystemActivity }) 
           )}
         </div>
 
-        {/* Right: Registration + Benefits */}
-        <div>
-          <h3 style={{ fontSize:'1rem', fontWeight:700, marginBottom:'14px', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.06em' }}>
-            ✍️ Pendaftaran Anggota Baru
-          </h3>
+        {/* Right: Registration + Benefits (Admin Only) */}
+        {isAdmin && (
+          <div>
+            <h3 style={{ fontSize:'1rem', fontWeight:700, marginBottom:'14px', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.06em' }}>
+              ✍️ Pendaftaran Anggota Baru
+            </h3>
 
-          <RegistrationForm apiBase={apiBase} logEcosystemActivity={logEcosystemActivity} />
+            <RegistrationForm apiBase={apiBase} logEcosystemActivity={logEcosystemActivity} />
 
-          {/* Benefits */}
-          <div className="glass-card" style={{ padding:'20px', marginTop:'20px' }}>
-            <h4 style={{ fontSize:'0.9rem', fontWeight:700, marginBottom:'14px' }}>🎁 Manfaat Keanggotaan</h4>
-            <div style={{ display:'grid', gap:'8px' }}>
-              {[
-                { icon:'💳', title:'Kopdes Pay', desc:'Dompet digital untuk transaksi koperasi' },
-                { icon:'🛒', title:'Akses Kopdes Shop', desc:'Belanja produk lokal dengan harga anggota' },
-                { icon:'🗳️', title:'Hak Suara RAT', desc:'Ikut Rapat Anggota Tahunan dan voting' },
-                { icon:'📈', title:'Investasi Desa', desc:'Akses ke program investasi lokal' },
-              ].map(b => (
-                <div key={b.title} style={{ display:'flex', gap:'12px', alignItems:'center', padding:'8px', background:'rgba(255,255,255,0.02)', borderRadius:'8px' }}>
-                  <span style={{ fontSize:'1.3rem' }}>{b.icon}</span>
-                  <div>
-                    <div style={{ fontSize:'0.8rem', fontWeight:700 }}>{b.title}</div>
-                    <div style={{ fontSize:'0.7rem', color:'var(--text-muted)' }}>{b.desc}</div>
+            {/* Benefits */}
+            <div className="glass-card" style={{ padding:'20px', marginTop:'20px' }}>
+              <h4 style={{ fontSize:'0.9rem', fontWeight:700, marginBottom:'14px' }}>🎁 Manfaat Keanggotaan</h4>
+              <div style={{ display:'grid', gap:'8px' }}>
+                {[
+                  { icon:'💳', title:'Kopdes Pay', desc:'Dompet digital untuk transaksi koperasi' },
+                  { icon:'🛒', title:'Akses Kopdes Shop', desc:'Belanja produk lokal dengan harga anggota' },
+                  { icon:'🗳️', title:'Hak Suara RAT', desc:'Ikut Rapat Anggota Tahunan dan voting' },
+                  { icon:'📈', title:'Investasi Desa', desc:'Akses ke program investasi lokal' },
+                ].map(b => (
+                  <div key={b.title} style={{ display:'flex', gap:'12px', alignItems:'center', padding:'8px', background:'rgba(255,255,255,0.02)', borderRadius:'8px' }}>
+                    <span style={{ fontSize:'1.3rem' }}>{b.icon}</span>
+                    <div>
+                      <div style={{ fontSize:'0.8rem', fontWeight:700 }}>{b.title}</div>
+                      <div style={{ fontSize:'0.7rem', color:'var(--text-muted)' }}>{b.desc}</div>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Shimmer & Spin Keyframes */}

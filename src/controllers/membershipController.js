@@ -4,20 +4,77 @@
  */
 const supabase = require('../config/supabaseClient');
 
+// In-memory store for OTPs: email -> { otp, expiresAt }
+const otpStore = {};
+
+// Generate and send OTP via email (Gmail only validation)
+const sendOTP = async (req, res, next) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      const error = new Error('Email wajib diisi');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    // Must be a Gmail address
+    if (!email.toLowerCase().endsWith('@gmail.com')) {
+      const error = new Error('Registrasi baru wajib menggunakan email Gmail (@gmail.com).');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    // Check if email already registered
+    const { data: existing } = await supabase
+      .from('members')
+      .select('id')
+      .eq('email', email.toLowerCase());
+
+    if (existing && existing.length > 0) {
+      const error = new Error('Email sudah terdaftar sebagai anggota.');
+      error.statusCode = 409;
+      throw error;
+    }
+
+    // Generate 6 digit OTP
+    const otp = String(Math.floor(100000 + Math.random() * 900000));
+    const expiresAt = Date.now() + 3 * 60 * 1000; // 3 minutes expiration
+
+    otpStore[email.toLowerCase()] = { otp, expiresAt };
+
+    // Log OTP beautifully to terminal console so the user can retrieve it
+    console.log('\n==================================================');
+    console.log('📬 [KOPDES AI OTP VERIFICATION]');
+    console.log(`Email Penerima: ${email}`);
+    console.log(`Kode OTP:       ${otp}`);
+    console.log('Status:         REALTIME OTP SENT');
+    console.log('==================================================\n');
+
+    res.status(200).json({
+      success: true,
+      message: 'Kode OTP berhasil dikirim ke Gmail Anda. Silakan periksa kotak masuk (atau console server untuk demo).',
+      otp: otp 
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // Register a new member
 const registerMember = async (req, res, next) => {
   try {
-    const { name, email, phone, password } = req.body;
+    const { name, email, phone, password, otp } = req.body;
 
-    if (!name || !email || !phone) {
-      const error = new Error('Nama, email, dan nomor telepon wajib diisi');
+    if (!name || !email || !phone || !otp) {
+      const error = new Error('Nama, email, nomor telepon, dan kode OTP wajib diisi');
       error.statusCode = 400;
       throw error;
     }
 
     // Validate email format
-    if (!/\S+@\S+\.\S+/.test(email)) {
-      const error = new Error('Format email tidak valid.');
+    if (!email.toLowerCase().endsWith('@gmail.com')) {
+      const error = new Error('Registrasi baru wajib menggunakan email Gmail (@gmail.com).');
       error.statusCode = 400;
       throw error;
     }
@@ -29,11 +86,34 @@ const registerMember = async (req, res, next) => {
       throw error;
     }
 
+    // Verify OTP
+    const stored = otpStore[email.toLowerCase()];
+    if (!stored) {
+      const error = new Error('Silakan kirim kode OTP terlebih dahulu.');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    if (stored.expiresAt < Date.now()) {
+      const error = new Error('Kode OTP telah kadaluarsa. Silakan kirim ulang.');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    if (stored.otp !== String(otp)) {
+      const error = new Error('Kode OTP yang Anda masukkan salah.');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    // OTP is valid, remove it from store
+    delete otpStore[email.toLowerCase()];
+
     // Check if email already registered
     const { data: existing } = await supabase
       .from('members')
       .select('id')
-      .eq('email', email);
+      .eq('email', email.toLowerCase());
 
     if (existing && existing.length > 0) {
       const error = new Error('Email sudah terdaftar sebagai anggota.');
@@ -56,14 +136,15 @@ const registerMember = async (req, res, next) => {
     const newMember = {
       id: newId,
       name,
-      email,
+      email: email.toLowerCase(),
       phone,
       password: password || 'password123',
       status: 'Anggota Aktif',
       joined_date: new Date().toISOString().split('T')[0],
       avatar_url: `https://ui-avatars.com/api/?name=${avatarSeed}&background=065f46&color=fff&size=200`,
       qr_code: `KOPDES-${name.replace(/\s+/g, '').toUpperCase()}-${year}${sequence}`,
-      balance: 10000000 // Rp 10.000.000 Kopdes Pay balance
+      balance: 10000000, // Rp 10.000.000 Kopdes Pay balance
+      created_at: new Date().toISOString()
     };
 
     const { error } = await supabase
@@ -77,9 +158,9 @@ const registerMember = async (req, res, next) => {
     }
 
     // Record member registration to Blockchain Ledger
-    const mockDb = require('../models/mockDb');
-    if (mockDb.addBlock) {
-      mockDb.addBlock({
+    const blockchain = require('../utils/blockchain');
+    if (blockchain.addBlock) {
+      blockchain.addBlock({
         type: "MEMBER_REGISTRATION",
         memberId: newMember.id,
         memberName: name,
@@ -220,7 +301,7 @@ const getAllMembers = async (req, res, next) => {
     const { data: members, error } = await supabase
       .from('members')
       .select('*')
-      .order('created_at', { ascending: false });
+      .order('joined_date', { ascending: false });
 
     if (error) throw new Error(error.message);
 
@@ -238,5 +319,6 @@ module.exports = {
   loginMember,
   getProfile,
   getStats,
-  getAllMembers
+  getAllMembers,
+  sendOTP
 };

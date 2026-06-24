@@ -96,26 +96,26 @@ const InvestorPage = ({ apiBase, profile, setProfile, navigateTo, subRoute }) =>
       setError('');
 
       // Fetch projects
-      const projRes = await fetch(`${apiBase}/investor/projects`);
-      const projResult = await projRes.json();
+      try {
+        const projRes = await fetch(`${apiBase}/investor/projects`);
+        const projResult = await projRes.json();
+        if (projResult.success) setProjects(projResult.data || []);
+      } catch (e) { console.error('Gagal memuat proyek:', e); }
 
       // Fetch my portfolio
-      const myInvRes = await fetch(`${apiBase}/investor/my-investments?memberId=${profile.id}`);
-      const myInvResult = await myInvRes.json();
+      try {
+        const myInvRes = await fetch(`${apiBase}/investor/my-investments?memberId=${profile.id}`);
+        const myInvResult = await myInvRes.json();
+        if (myInvResult.success) setMyInvestments(myInvResult.data || []);
+      } catch (e) { console.error('Gagal memuat investasi:', e); }
 
       // Fetch blockchain
-      const blockchainRes = await fetch(`${apiBase}/investor/blockchain`);
-      const blockchainResult = await blockchainRes.json();
+      try {
+        const blockchainRes = await fetch(`${apiBase}/investor/blockchain`);
+        const blockchainResult = await blockchainRes.json();
+        if (blockchainResult.success) setBlockchain(blockchainResult.data || []);
+      } catch (e) { console.error('Gagal memuat blockchain:', e); }
 
-      if (projResult.success && myInvResult.success) {
-        setProjects(projResult.data);
-        setMyInvestments(myInvResult.data);
-        if (blockchainResult.success) {
-          setBlockchain(blockchainResult.data || []);
-        }
-      } else {
-        setError('Gagal memuat data investasi.');
-      }
     } catch (err) {
       setError('Gagal menghubungi server backend.');
     } finally {
@@ -388,7 +388,7 @@ const InvestorPage = ({ apiBase, profile, setProfile, navigateTo, subRoute }) =>
       {/* PORTFOLIO SUMMARY CARDS */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))',
         gap: '20px',
         marginBottom: '30px'
       }}>
@@ -423,12 +423,7 @@ const InvestorPage = ({ apiBase, profile, setProfile, navigateTo, subRoute }) =>
         </div>
       </div>
 
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: '1fr 340px',
-        gap: '30px',
-        alignItems: 'start'
-      }}>
+      <div className="responsive-grid-sidebar">
         {/* INVESTMENT CAMPAIGNS CATALOG */}
         <div>
           <h3 style={{ fontSize: '1.25rem', marginBottom: '16px' }}>Proyek Koperasi Terbuka (Crowdfunding)</h3>

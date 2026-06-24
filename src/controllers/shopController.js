@@ -84,15 +84,18 @@ const addToCart = async (req, res, next) => {
       throw error;
     }
 
-    const { data, error } = await supabase
+    // Upsert the item into the cart. This will update the quantity if the product already exists for this member, avoiding unique constraint violations.
+    const { data: upsertData, error: upsertErr } = await supabase
       .from('cart_items')
       .upsert({
         member_id: memberId,
         product_id: productId,
         quantity: Number(quantity)
-      });
+      }, { onConflict: 'member_id,product_id' })
+      .select();
 
-    if (error) throw new Error(error.message);
+    if (upsertErr) throw new Error(upsertErr.message);
+    const data = upsertData;
 
     res.status(200).json({
       success: true,
@@ -241,6 +244,7 @@ const checkout = async (req, res, next) => {
       .from('orders')
       .insert({
         id: orderId,
+        order_id: orderId,
         member_id: memberId,
         total_amount: totalAmount,
         payment_method: method,
@@ -293,9 +297,9 @@ const checkout = async (req, res, next) => {
       .eq('member_id', memberId);
 
     // Record shopping checkout to Blockchain Ledger
-    const mockDb = require('../models/mockDb');
-    if (mockDb.addBlock) {
-      mockDb.addBlock({
+    const blockchain = require('../utils/blockchain');
+    if (blockchain.addBlock) {
+      blockchain.addBlock({
         type: "SHOPPING_CHECKOUT",
         memberId,
         memberName: member.name,
@@ -334,9 +338,19 @@ const getOrderHistory = async (req, res, next) => {
     const { data: orders, error } = await query;
     if (error) throw new Error(error.message);
 
+    // Map to camelCase for frontend compatibility
+    const mapped = (orders || []).map(o => ({
+      id: o.id,
+      orderId: o.order_id || o.id,
+      memberId: o.member_id,
+      totalAmount: Number(o.total_amount || 0),
+      paymentMethod: o.payment_method || 'Kopdes Pay',
+      createdAt: o.created_at || new Date().toISOString()
+    }));
+
     res.status(200).json({
       success: true,
-      data: orders || []
+      data: mapped
     });
   } catch (error) {
     next(error);

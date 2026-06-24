@@ -2,14 +2,46 @@
  * Finance Controller
  * Handles Digital Finance (Savings/Simpanan, Loans/Pinjaman, SHU, and Financial Statements)
  */
-const { financeSummary, members } = require('../models/mockDb');
+const supabase = require('../config/supabaseClient');
 
 // Get overview of cooperative finance
-const getFinanceSummary = (req, res, next) => {
+const getFinanceSummary = async (req, res, next) => {
   try {
+    const { data, error } = await supabase.from('finance_summary').select('*').limit(1);
+    if (error) throw new Error(error.message);
+
+    // Provide robust defaults for presentation/hackathon in case of empty table
+    let summary = {
+      totalAssets: 15000000000,   // Rp 15 Milyar
+      totalSavings: 8000000000,   // Rp 8 Milyar
+      totalLoans: 5000000000,     // Rp 5 Milyar
+      totalSales: 12080000000,    // Rp 12.08 Milyar
+      shuThisYear: 1100000000,    // Rp 1.1 Milyar
+      savingsBreakdown: {
+        pokok: 1500000000,
+        wajib: 4500000000,
+        sukarela: 2000000000
+      }
+    };
+
+    if (data && data.length > 0) {
+      summary = {
+        totalAssets: Number(data[0].total_assets),
+        totalSavings: Number(data[0].total_savings),
+        totalLoans: Number(data[0].total_loans),
+        totalSales: Number(data[0].total_sales),
+        shuThisYear: Number(data[0].shu_this_year),
+        savingsBreakdown: {
+          pokok: Number(data[0].savings_pokok),
+          wajib: Number(data[0].savings_wajib),
+          sukarela: Number(data[0].savings_sukarela)
+        }
+      };
+    }
+
     res.status(200).json({
       success: true,
-      data: financeSummary
+      data: summary
     });
   } catch (error) {
     next(error);
@@ -17,16 +49,17 @@ const getFinanceSummary = (req, res, next) => {
 };
 
 // Get individual member's finance status
-const getMemberFinance = (req, res, next) => {
+const getMemberFinance = async (req, res, next) => {
   try {
     const memberId = req.query.id || '1205 2024 0001';
-    const member = members.find(m => m.id === memberId);
+    const { data: members, error } = await supabase.from('members').select('*').eq('id', memberId);
 
-    if (!member) {
-      const error = new Error('Member not found');
-      error.statusCode = 404;
-      throw error;
+    if (error || !members || members.length === 0) {
+      const err = new Error('Member not found');
+      err.statusCode = 404;
+      throw err;
     }
+    const member = members[0];
 
     // Mock individual finance data for Budi Santoso
     res.status(200).json({
@@ -58,7 +91,7 @@ const getMemberFinance = (req, res, next) => {
 };
 
 // Deposit savings (Simpanan Sukarela)
-const depositSavings = (req, res, next) => {
+const depositSavings = async (req, res, next) => {
   try {
     const { memberId, amount, type } = req.body; // type: 'sukarela', 'wajib'
 
@@ -68,8 +101,8 @@ const depositSavings = (req, res, next) => {
       throw error;
     }
 
-    const member = members.find(m => m.id === memberId);
-    if (!member) {
+    const { data: members, error: memErr } = await supabase.from('members').select('*').eq('id', memberId);
+    if (memErr || !members || members.length === 0) {
       const error = new Error('Member not found');
       error.statusCode = 404;
       throw error;
@@ -78,11 +111,19 @@ const depositSavings = (req, res, next) => {
     const depositAmount = Number(amount);
     const savingType = type || 'sukarela';
 
-    // Update overall cooperative metrics
-    financeSummary.totalSavings += depositAmount;
-    financeSummary.totalAssets += depositAmount;
-    if (financeSummary.savingsBreakdown[savingType] !== undefined) {
-      financeSummary.savingsBreakdown[savingType] += depositAmount;
+    // Get current finance summary
+    const { data: summaries } = await supabase.from('finance_summary').select('*').limit(1);
+    if (summaries && summaries.length > 0) {
+      const current = summaries[0];
+      const updates = {
+        total_savings: Number(current.total_savings) + depositAmount,
+        total_assets: Number(current.total_assets) + depositAmount
+      };
+      if (savingType === 'sukarela') updates.savings_sukarela = Number(current.savings_sukarela) + depositAmount;
+      if (savingType === 'wajib') updates.savings_wajib = Number(current.savings_wajib) + depositAmount;
+      if (savingType === 'pokok') updates.savings_pokok = Number(current.savings_pokok) + depositAmount;
+
+      await supabase.from('finance_summary').update(updates).eq('id', current.id);
     }
 
     res.status(200).json({
@@ -101,7 +142,7 @@ const depositSavings = (req, res, next) => {
 };
 
 // Apply for a loan (Pinjaman)
-const applyLoan = (req, res, next) => {
+const applyLoan = async (req, res, next) => {
   try {
     const { memberId, amount, tenorMonths } = req.body; // tenorMonths: e.g. 12, 24
 
@@ -111,8 +152,8 @@ const applyLoan = (req, res, next) => {
       throw error;
     }
 
-    const member = members.find(m => m.id === memberId);
-    if (!member) {
+    const { data: members, error: memErr } = await supabase.from('members').select('*').eq('id', memberId);
+    if (memErr || !members || members.length === 0) {
       const error = new Error('Member not found');
       error.statusCode = 404;
       throw error;
@@ -127,7 +168,13 @@ const applyLoan = (req, res, next) => {
     }
 
     // Update overall cooperative metrics (loans outstanding)
-    financeSummary.totalLoans += loanAmount;
+    const { data: summaries } = await supabase.from('finance_summary').select('*').limit(1);
+    if (summaries && summaries.length > 0) {
+      const current = summaries[0];
+      await supabase.from('finance_summary').update({
+        total_loans: Number(current.total_loans) + loanAmount
+      }).eq('id', current.id);
+    }
 
     res.status(201).json({
       success: true,

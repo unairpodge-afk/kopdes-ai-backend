@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 const KopdesPayPage = ({ profile, setProfile, apiBase, logEcosystemActivity }) => {
   const [shuBalance, setShuBalance] = useState(1100000); // Rp 1.100.000 SHU Celengan
@@ -9,11 +9,69 @@ const KopdesPayPage = ({ profile, setProfile, apiBase, logEcosystemActivity }) =
   const [amount, setAmount] = useState('');
   const [transferMsg, setTransferMsg] = useState('');
 
-  // Transaction history logs (Initial mock)
-  const [transactions, setTransactions] = useState([
-    { id: 'tx1', desc: 'Belanja di Kopdes Shop', amount: -225000, date: '22 Juni 2026', type: 'debit' },
-    { id: 'tx2', desc: 'Bunga Simpanan Sukarela', amount: 45000, date: '20 Juni 2026', type: 'credit' }
-  ]);
+  // Dynamic Transaction history states
+  const [transactions, setTransactions] = useState([]);
+  const [txLoading, setTxLoading] = useState(true);
+
+  const fetchTransactions = async () => {
+    if (!profile) return;
+    try {
+      setTxLoading(true);
+      const res = await fetch(`${apiBase}/investor/blockchain`);
+      const data = await res.json();
+      if (data.success) {
+        // Filter blocks related to this member's financial mutations
+        const walletTypes = [
+          'P2P_TRANSFER',
+          'SHU_CASHOUT',
+          'QRIS_PAYMENT',
+          'SHOPPING_CHECKOUT',
+          'SAVINGS_DEPOSIT',
+          'LOAN_APPLICATION'
+        ];
+        
+        const filtered = (data.data || [])
+          .filter(block => block.data && walletTypes.includes(block.data.type) && 
+            (block.data.memberId === profile.id || block.data.message?.includes(profile.name)))
+          .map(block => {
+            const type = block.data.type || '';
+            
+            // Determine if credit (inflow) or debit (outflow)
+            let amountSign = -1; // Default to debit
+            if (type === 'SHU_CASHOUT' || type === 'SAVINGS_DEPOSIT') {
+              amountSign = 1;
+            } else if (type === 'P2P_TRANSFER') {
+              // If P2P, check if we received it (it contains 'ke [our name]')
+              if (block.data.message?.includes(`ke ${profile.name}`)) {
+                amountSign = 1;
+              } else if (block.data.memberId === profile.id) {
+                amountSign = -1;
+              } else {
+                amountSign = 1; // Fallback to credit
+              }
+            }
+            
+            return {
+              id: block.hash || `tx-${block.index}`,
+              desc: block.data.message || 'Transaksi Ekosistem',
+              amount: amountSign * Number(block.data.amount || 0),
+              date: new Date(block.timestamp).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }),
+              type: amountSign > 0 ? 'credit' : 'debit'
+            };
+          });
+          
+        setTransactions(filtered);
+      }
+    } catch (err) {
+      console.error('Gagal mengambil riwayat transaksi:', err);
+    } finally {
+      setTxLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchTransactions();
+  }, [apiBase, profile?.id]);
 
   if (!profile) {
     return (
@@ -53,14 +111,7 @@ const KopdesPayPage = ({ profile, setProfile, apiBase, logEcosystemActivity }) =
           ...profile,
           balance: balance - transAmt
         });
-        const newTx = {
-          id: `tx-${Date.now()}`,
-          desc: `Transfer P2P ke ${recipient}`,
-          amount: -transAmt,
-          date: 'Baru saja',
-          type: 'debit'
-        };
-        setTransactions([newTx, ...transactions]);
+
         setTransferMsg(`Sukses mentransfer Rp ${transAmt.toLocaleString('id-ID')} ke ${recipient}`);
         setRecipient('');
         setAmount('');
@@ -74,6 +125,11 @@ const KopdesPayPage = ({ profile, setProfile, apiBase, logEcosystemActivity }) =
             'pay'
           );
         }
+
+        // Refresh transaction list dynamically
+        setTimeout(() => {
+          fetchTransactions();
+        }, 800);
       } else {
         alert(result.error?.message || 'Transfer gagal.');
       }
@@ -103,14 +159,6 @@ const KopdesPayPage = ({ profile, setProfile, apiBase, logEcosystemActivity }) =
           ...profile,
           balance: balance + shuBalance
         });
-        const newTx = {
-          id: `tx-${Date.now()}`,
-          desc: 'Pencairan Dana SHU Buku 2025',
-          amount: shuBalance,
-          date: 'Baru saja',
-          type: 'credit'
-        };
-        setTransactions([newTx, ...transactions]);
         
         // Log to Blockchain Ledger
         if (logEcosystemActivity) {
@@ -124,6 +172,11 @@ const KopdesPayPage = ({ profile, setProfile, apiBase, logEcosystemActivity }) =
 
         setShuBalance(0);
         alert('Sukses mencairkan Dana SHU ke saldo Kopdes Pay Utama!');
+        
+        // Refresh transaction list dynamically
+        setTimeout(() => {
+          fetchTransactions();
+        }, 800);
       } else {
         alert('Gagal mencairkan SHU.');
       }
@@ -141,7 +194,7 @@ const KopdesPayPage = ({ profile, setProfile, apiBase, logEcosystemActivity }) =
 
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))',
         gap: '30px',
         alignItems: 'start'
       }}>
@@ -245,14 +298,6 @@ const KopdesPayPage = ({ profile, setProfile, apiBase, logEcosystemActivity }) =
                           ...profile,
                           balance: balance - payAmt
                         });
-                        const newTx = {
-                          id: `tx-${Date.now()}`,
-                          desc: 'Belanja QRIS Merchant Desa',
-                          amount: -payAmt,
-                          date: 'Baru saja',
-                          type: 'debit'
-                        };
-                        setTransactions([newTx, ...transactions]);
                         
                         if (logEcosystemActivity) {
                           logEcosystemActivity(
@@ -264,6 +309,11 @@ const KopdesPayPage = ({ profile, setProfile, apiBase, logEcosystemActivity }) =
                         }
                         setShowQris(false);
                         alert(`Sukses melakukan pembayaran QRIS Merchant Desa sebesar Rp ${payAmt.toLocaleString('id-ID')}!`);
+                        
+                        // Refresh transaction list dynamically
+                        setTimeout(() => {
+                          fetchTransactions();
+                        }, 800);
                       }
                     } catch (err) {
                       alert('Gagal melakukan pembayaran QRIS.');
@@ -326,22 +376,34 @@ const KopdesPayPage = ({ profile, setProfile, apiBase, logEcosystemActivity }) =
 
           {/* Wallet logs */}
           <div className="glass-card" style={{ padding: '20px' }}>
-            <h4 style={{ fontSize: '1rem', marginBottom: '12px' }}>Riwayat Transaksi Dompet</h4>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {transactions.map((tx) => (
-                <div key={tx.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem', paddingBottom: '8px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                  <div>
-                    <strong>{tx.desc}</strong>
-                    <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '2px' }}>{tx.date}</div>
-                  </div>
-                  <span style={{
-                    fontWeight: 700,
-                    color: tx.amount < 0 ? '#fca5a5' : 'var(--primary-green)'
-                  }}>
-                    {tx.amount < 0 ? '-' : '+'}Rp {Math.abs(tx.amount).toLocaleString('id-ID')}
-                  </span>
+            <h4 style={{ fontSize: '1.1rem', marginBottom: '12px' }}>Riwayat Transaksi & Mutasi Saldo</h4>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '320px', overflowY: 'auto', paddingRight: '4px' }}>
+              {txLoading ? (
+                <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                  Memuat riwayat transaksi...
                 </div>
-              ))}
+              ) : transactions.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                  Belum ada riwayat transaksi.
+                </div>
+              ) : (
+                transactions.map((tx) => (
+                  <div key={tx.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem', paddingBottom: '8px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                    <div style={{ flex: 1, marginRight: '10px' }}>
+                      <strong style={{ color: '#f8fafc', fontSize: '0.8rem', display: 'block', lineHeight: '1.4' }}>{tx.desc}</strong>
+                      <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '2px' }}>{tx.date}</div>
+                    </div>
+                    <span style={{
+                      fontWeight: 700,
+                      fontSize: '0.85rem',
+                      whiteSpace: 'nowrap',
+                      color: tx.amount < 0 ? '#fca5a5' : 'var(--primary-green)'
+                    }}>
+                      {tx.amount < 0 ? '-' : '+'}Rp {Math.abs(tx.amount).toLocaleString('id-ID')}
+                    </span>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>

@@ -19,7 +19,9 @@ import KopdesPayPage from './pages/KopdesPayPage';
 import ESGScorecardPage from './pages/ESGScorecardPage';
 import RegisterPage from './pages/RegisterPage';
 
-const API_BASE = 'https://kopdes-ai-backend.vercel.app/api/v1';
+const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+  ? 'http://localhost:5000/api/v1'
+  : 'https://kopdes-ai-backend.vercel.app/api/v1';
 
 function App() {
   const [activeTab, setActiveTab] = useState(() => {

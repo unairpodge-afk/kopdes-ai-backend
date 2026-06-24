@@ -120,9 +120,9 @@ const investInProject = async (req, res, next) => {
     if (projUpdateErr) throw new Error(projUpdateErr.message);
 
     // 6. Record to Blockchain Ledger
-    const mockDb = require('../models/mockDb');
-    if (mockDb.addBlock) {
-      mockDb.addBlock({
+    const blockchain = require('../utils/blockchain');
+    if (blockchain.addBlock) {
+      blockchain.addBlock({
         type: "PROJECT_INVESTMENT",
         investmentId,
         projectId,
@@ -190,9 +190,11 @@ const createProject = async (req, res, next) => {
       throw error;
     }
 
+    const projectId = `proj-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
     const { data: newProject, error } = await supabase
       .from('investment_projects')
       .insert({
+        id: projectId,
         title,
         description: description || '',
         target_amount: Number(targetAmount),
@@ -206,9 +208,9 @@ const createProject = async (req, res, next) => {
     if (error) throw new Error(error.message);
 
     // Record project creation to Blockchain Ledger
-    const mockDb = require('../models/mockDb');
-    if (mockDb.addBlock) {
-      mockDb.addBlock({
+    const blockchain = require('../utils/blockchain');
+    if (blockchain.addBlock) {
+      blockchain.addBlock({
         type: "PROJECT_CREATION",
         projectTitle: title,
         targetAmount: Number(targetAmount),
@@ -260,10 +262,10 @@ const registerInvestor = async (req, res, next) => {
     if (updateErr) throw new Error(updateErr.message);
 
     // 3. Record investor registration to Blockchain Ledger
-    const mockDb = require('../models/mockDb');
+    const blockchain = require('../utils/blockchain');
     let block = null;
-    if (mockDb.addBlock) {
-      block = mockDb.addBlock({
+    if (blockchain.addBlock) {
+      block = blockchain.addBlock({
         type: "INVESTOR_REGISTRATION",
         memberId: member.id,
         memberName: member.name,
@@ -309,10 +311,10 @@ const logActivity = async (req, res, next) => {
   try {
     const { type, memberId, memberName, message, amount, link } = req.body;
 
-    const mockDb = require('../models/mockDb');
+    const blockchain = require('../utils/blockchain');
     let block = null;
-    if (mockDb.addBlock) {
-      block = mockDb.addBlock({
+    if (blockchain.addBlock) {
+      block = blockchain.addBlock({
         type,
         memberId,
         memberName,

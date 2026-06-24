@@ -53,7 +53,7 @@ const ESGScorecardPage = ({ profile, setProfile, apiBase }) => {
       {/* ESG Circle Progress Gauges Grid */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))',
         gap: '24px',
         marginBottom: '30px'
       }}>
@@ -117,7 +117,7 @@ const ESGScorecardPage = ({ profile, setProfile, apiBase }) => {
       {/* Bottom stats tables */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))',
         gap: '24px'
       }}>
         {/* Left Column based on role */}

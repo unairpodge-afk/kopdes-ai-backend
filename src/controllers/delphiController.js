@@ -187,9 +187,9 @@ const submitAnpResponse = async (req, res, next) => {
     }
 
     // Record Delphi ANP submission to Blockchain Ledger
-    const mockDb = require('../models/mockDb');
-    if (mockDb.addBlock) {
-      mockDb.addBlock({
+    const blockchain = require('../utils/blockchain');
+    if (blockchain.addBlock) {
+      blockchain.addBlock({
         type: "DELPHI_ANP_SUBMISSION",
         memberId,
         memberName,
@@ -210,12 +210,7 @@ const submitAnpResponse = async (req, res, next) => {
 // Reset/Clear all Delphi-ANP responses
 const resetAnpResponses = async (req, res, next) => {
   try {
-    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
-      const mockDb = require('../models/mockDb');
-      mockDb.delphiAnpResponses.length = 0;
-    } else {
-      await supabase.from('delphi_anp_responses').delete().neq('member_id', '');
-    }
+    await supabase.from('delphi_anp_responses').delete().neq('member_id', '');
 
     res.status(200).json({
       success: true,
@@ -229,7 +224,7 @@ const resetAnpResponses = async (req, res, next) => {
 // Simulate auto-filling the remaining experts for presentation / demo convenience
 const simulateAnpResponses = async (req, res, next) => {
   try {
-    const mockDb = require('../models/mockDb');
+    
     
     // Preset list of 13 experts with realistic comparisons
     const presetExperts = [
@@ -249,33 +244,32 @@ const simulateAnpResponses = async (req, res, next) => {
     ];
 
     // Clear existing
-    mockDb.delphiAnpResponses.length = 0;
+    await supabase.from('delphi_anp_responses').delete().neq('member_id', '');
     
-    // Push all preset
-    for (const exp of presetExperts) {
-      mockDb.delphiAnpResponses.push({
-        id: `uuid-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-        created_at: new Date().toISOString(),
-        member_id: exp.id,
-        member_name: exp.name,
-        institution: exp.inst,
-        comparisons: exp.comp,
-        submitted_at: new Date().toISOString()
-      });
-    }
+    // Format for Supabase insert
+    const inserts = presetExperts.map(exp => ({
+      member_id: exp.id,
+      member_name: exp.name,
+      institution: exp.inst,
+      comparisons: exp.comp
+    }));
 
-    // Record Delphi ANP simulation to Blockchain Ledger
-    if (mockDb.addBlock) {
-      mockDb.addBlock({
+    await supabase.from('delphi_anp_responses').insert(inserts);
+
+    const blockchain = require('../utils/blockchain');
+    if (blockchain.addBlock) {
+      blockchain.addBlock({
         type: "DELPHI_ANP_SIMULATION",
         message: `Simulasi otomatis dijalankan: 13 matriks keputusan Saaty pakar terisi penuh`
       });
     }
 
+    const { data: newData } = await supabase.from('delphi_anp_responses').select('*');
+
     res.status(200).json({
       success: true,
       message: 'Simulasi auto-fill 13 pakar berhasil diaktifkan. Matriks Saaty terisi penuh.',
-      data: mockDb.delphiAnpResponses
+      data: newData
     });
   } catch (error) {
     next(error);

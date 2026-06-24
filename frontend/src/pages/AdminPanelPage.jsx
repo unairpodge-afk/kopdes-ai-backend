@@ -392,7 +392,7 @@ const AdminPanelPage = ({ apiBase, profile, logEcosystemActivity, navigateTo }) 
         {/* ── Blockchain Network Metrics ── */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(175px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))',
           gap: '14px'
         }}>
           {/* SHA-256 */}
@@ -738,7 +738,7 @@ const AdminPanelPage = ({ apiBase, profile, logEcosystemActivity, navigateTo }) 
       {/* Grid of Main Admin controls */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))',
         gap: '30px',
         alignItems: 'start'
       }}>
