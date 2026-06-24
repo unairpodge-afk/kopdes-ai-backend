@@ -1,0 +1,8 @@
+frontend/
+node_modules/
+.git/
+.agents/
+.gemini/
+task.md
+implementation_plan.md
+walkthrough.md
