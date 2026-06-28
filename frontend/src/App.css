@@ -688,6 +688,11 @@
   }
 }
 
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 .mobile-nav-category-group {
   display: flex;
   flex-direction: column;

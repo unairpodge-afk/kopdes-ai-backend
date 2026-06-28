@@ -5,7 +5,8 @@ const {
   createAnnouncement,
   getVotings,
   castVote,
-  submitReport
+  submitReport,
+  getCooperativeNews
 } = require('../controllers/governanceController');
 
 // Announcements
@@ -18,5 +19,8 @@ router.post('/vote', castVote);
 
 // User Reports / Aspirasi
 router.post('/report', submitReport);
+
+// Cooperative News
+router.get('/news', getCooperativeNews);
 
 module.exports = router;

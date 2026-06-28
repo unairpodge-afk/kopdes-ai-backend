@@ -1,22 +1,86 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 const CommodityExchangePage = ({ profile, logEcosystemActivity }) => {
-  const [exchangeProducts, setExchangeProducts] = useState([
-    { id: 'c1', name: 'Kopi Arabika Gayo', price: 72000, bid: 71500, ask: 72500, trend: 'up' },
-    { id: 'c2', name: 'Kakao Bubuk Organik', price: 28500, bid: 28200, ask: 28800, trend: 'stable' },
-    { id: 'c3', name: 'Beras Premium Cianjur', price: 14800, bid: 14600, ask: 14900, trend: 'up' }
-  ]);
+  const [exchangeProducts, setExchangeProducts] = useState([]);
+  const [tradeLogs, setTradeLogs] = useState([]);
+  const [coopName, setCoopName] = useState('Koperasi Terdekat');
+  const [marketSignal, setMarketSignal] = useState('Stabil');
+  const [aiForecast, setAiForecast] = useState('Permintaan lokal masih normal, tetapi kondisi cuaca dan pengiriman komoditas desa berdampak pada spread harga.');
 
-  const [tradeLogs, setTradeLogs] = useState([
-    { id: 't1', commodity: 'Kopi Arabika Gayo', type: 'Beli', qty: '100 Kg', price: 72000, total: 7200000, time: '10 Menit lalu' },
-    { id: 't2', commodity: 'Beras Premium Cianjur', type: 'Jual', qty: '200 Kg', price: 14800, total: 2960000, time: '25 Menit lalu' }
-  ]);
+  useEffect(() => {
+    if (profile && profile.name) {
+      setCoopName(profile.status === 'Admin Koperasi' ? `${profile.name}’s Koperasi` : `${profile.name}’s Desa`);
+    }
+
+    const baseProducts = [
+      { id: 'c1', name: 'Kopi Arabika Lokal', basePrice: 72000, region: 'Aceh' },
+      { id: 'c2', name: 'Kakao Bubuk Organik', basePrice: 28500, region: 'Jawa Barat' },
+      { id: 'c3', name: 'Beras Premium', basePrice: 14800, region: 'Jawa Barat' },
+      { id: 'c4', name: 'Madu Hutan', basePrice: 180000, region: 'Kalimantan' },
+      { id: 'c5', name: 'Ikan Patin Segar', basePrice: 42000, region: 'Sumatera' }
+    ];
+
+    const coopCode = profile?.status === 'Admin Koperasi' ? 'KOPERASI' : 'MITRA';
+    const seededProducts = baseProducts.map((item, index) => {
+      const fluctuation = ((index + 1) * 0.02) * (profile?.status === 'Mitra Investor' ? 1.15 : 1);
+      const direction = index % 2 === 0 ? 1 : -1;
+      const price = Math.round(item.basePrice * (1 + fluctuation * direction));
+      return {
+        ...item,
+        id: `${item.id}-${coopCode}`,
+        price,
+        bid: Math.round(price * 0.992),
+        ask: Math.round(price * 1.008),
+        trend: direction === 1 ? 'up' : 'stable'
+      };
+    });
+
+    setExchangeProducts(seededProducts);
+    setTradeLogs([
+      {
+        id: `t-${Date.now()}-1`,
+        commodity: seededProducts[0].name,
+        type: 'Beli',
+        qty: '50 Kg',
+        price: seededProducts[0].ask,
+        total: seededProducts[0].ask * 50,
+        time: '5 Menit lalu',
+        note: 'Permintaan koperasi lokal tinggi'
+      },
+      {
+        id: `t-${Date.now()}-2`,
+        commodity: seededProducts[2].name,
+        type: 'Jual',
+        qty: '120 Kg',
+        price: seededProducts[2].bid,
+        total: seededProducts[2].bid * 120,
+        time: '18 Menit lalu',
+        note: 'Pasokan beras premium masuk gudang'
+      }
+    ]);
+
+    const signal = profile?.status === 'Admin Koperasi'
+      ? 'Volume tender koperasi sedang meningkat' 
+      : 'Ketersediaan stok komoditas lokal stabil';
+    setMarketSignal(signal);
+
+    const forecast = profile?.status === 'Admin Koperasi'
+      ? 'AI prediksi spread harga cenderung positif untuk komoditas unggulan pada 24 jam ke depan.'
+      : 'AI menyarankan menjaga stok komoditas lokal dan memonitor harga regional setiap hari.';
+    setAiForecast(forecast);
+  }, [profile]);
 
   // Trading form state
-  const [selectedComm, setSelectedComm] = useState('c1');
+  const [selectedComm, setSelectedComm] = useState('');
   const [tradeType, setTradeType] = useState('Beli');
   const [quantity, setQuantity] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+
+  useEffect(() => {
+    if (exchangeProducts.length && !exchangeProducts.find(item => item.id === selectedComm)) {
+      setSelectedComm(exchangeProducts[0].id);
+    }
+  }, [exchangeProducts, selectedComm]);
 
   const handleExecuteTrade = (e) => {
     e.preventDefault();
@@ -50,6 +114,18 @@ const CommodityExchangePage = ({ profile, logEcosystemActivity }) => {
       <div style={{ marginBottom: '24px' }}>
         <h2 style={{ fontSize: '1.8rem', fontWeight: 700, marginBottom: '6px' }}>AI Commodity Exchange</h2>
         <p style={{ color: 'var(--text-muted)' }}>Bursa komoditas desa digital terintegrasi untuk penawaran tender transparan dan prediksi harga cerdas.</p>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginTop: '16px' }}>
+          <div className="glass-card" style={{ padding: '16px', borderLeft: '4px solid #60a5fa' }}>
+            <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '8px' }}>Profil Koperasi</div>
+            <div style={{ fontSize: '1rem', fontWeight: 700, color: '#ffffff' }}>{coopName}</div>
+            <div style={{ marginTop: '8px', color: '#a1a1aa', fontSize: '0.83rem' }}>Peran: {profile?.status || 'Tamu'}</div>
+          </div>
+          <div className="glass-card" style={{ padding: '16px', borderLeft: '4px solid #a855f7' }}>
+            <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '8px' }}>Sinyal Pasar Koperasi</div>
+            <div style={{ fontSize: '1rem', fontWeight: 700, color: '#ffffff' }}>{marketSignal}</div>
+            <div style={{ marginTop: '8px', color: '#a1a1aa', fontSize: '0.83rem' }}>{aiForecast}</div>
+          </div>
+        </div>
       </div>
 
       <div style={{

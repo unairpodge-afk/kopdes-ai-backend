@@ -7,6 +7,7 @@ const AdminPanelPage = ({ apiBase, profile, logEcosystemActivity, navigateTo }) 
   const [responses, setResponses] = useState([]);
   const [shipments, setShipments] = useState([]);
   const [members, setMembers] = useState([]);
+  const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [blockchain, setBlockchain] = useState([]);
@@ -31,35 +32,61 @@ const AdminPanelPage = ({ apiBase, profile, logEcosystemActivity, navigateTo }) 
       setLoading(true);
       setError('');
       
-      const res = await fetch(`${apiBase}/delphi/active`);
-      const result = await res.json();
-      if (result.success && result.data.length > 0) {
-        setSurveys(result.data);
-        const survey = result.data[0];
-        setSelectedSurvey(survey);
-        if (survey.currentRoundDetails) {
-          const respRes = await fetch(`${apiBase}/delphi/results/${survey.currentRoundDetails.id}`);
-          const respResult = await respRes.json();
-          if (respResult.success) {
-            setResponses(respResult.data);
+      // Fetch Delphi
+      try {
+        const res = await fetch(`${apiBase}/delphi/active`);
+        const result = await res.json();
+        if (result.success && result.data.length > 0) {
+          setSurveys(result.data);
+          const survey = result.data[0];
+          setSelectedSurvey(survey);
+          if (survey.currentRoundDetails) {
+            const respRes = await fetch(`${apiBase}/delphi/results/${survey.currentRoundDetails.id}`);
+            const respResult = await respRes.json();
+            if (respResult.success) {
+              setResponses(respResult.data);
+            }
           }
+        } else {
+          setSurveys([]);
+          setSelectedSurvey(null);
+          setResponses([]);
         }
-      } else {
-        setSurveys([]);
-        setSelectedSurvey(null);
-        setResponses([]);
+      } catch (err) {
+        console.error('Error fetching Delphi active survey:', err);
       }
 
-      const shipRes = await fetch(`${apiBase}/admin/supply-chain`);
-      const shipResult = await shipRes.json();
-      if (shipResult.success) {
-        setShipments(shipResult.data);
+      // Fetch Supply Chain
+      try {
+        const shipRes = await fetch(`${apiBase}/admin/supply-chain`);
+        const shipResult = await shipRes.json();
+        if (shipResult.success) {
+          setShipments(shipResult.data);
+        }
+      } catch (err) {
+        console.error('Error fetching supply chain:', err);
       }
 
-      const memRes = await fetch(`${apiBase}/membership/list`);
-      const memResult = await memRes.json();
-      if (memResult.success) {
-        setMembers(memResult.data);
+      // Fetch Members
+      try {
+        const memRes = await fetch(`${apiBase}/membership/list`);
+        const memResult = await memRes.json();
+        if (memResult.success) {
+          setMembers(memResult.data);
+        }
+      } catch (err) {
+        console.error('Error fetching members list:', err);
+      }
+
+      // Fetch Projects
+      try {
+        const projRes = await fetch(`${apiBase}/investor/projects`);
+        const projResult = await projRes.json();
+        if (projResult.success) {
+          setProjects(projResult.data || []);
+        }
+      } catch (err) {
+        console.error('Error fetching projects list:', err);
       }
     } catch (err) {
       setError('Gagal memuat data panel admin.');
@@ -274,13 +301,58 @@ const AdminPanelPage = ({ apiBase, profile, logEcosystemActivity, navigateTo }) 
     }
   };
 
+  const handleApproveProject = async (projectId) => {
+    setActionMsg('');
+    setError('');
+    try {
+      const res = await fetch(`${apiBase}/admin/projects/approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId })
+      });
+      const result = await res.json();
+      if (result.success) {
+        setActionMsg('Proyek berhasil disetujui dan dirilis ke publik!');
+        fetchData();
+        setTimeout(() => setActionMsg(''), 4000);
+      } else {
+        setError(result.error?.message || 'Gagal menyetujui proyek.');
+      }
+    } catch (err) {
+      setError('Gagal menghubungi server.');
+    }
+  };
+
+  const handleRejectProject = async (projectId) => {
+    setActionMsg('');
+    setError('');
+    try {
+      const res = await fetch(`${apiBase}/admin/projects/reject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId })
+      });
+      const result = await res.json();
+      if (result.success) {
+        setActionMsg('Proyek telah berhasil ditolak.');
+        fetchData();
+        setTimeout(() => setActionMsg(''), 4000);
+      } else {
+        setError(result.error?.message || 'Gagal menolak proyek.');
+      }
+    } catch (err) {
+      setError('Gagal menghubungi server.');
+    }
+  };
+
   /* ─────────────────── WEB3 HELPER FUNCTIONS ─────────────────── */
 
   const verifyChainIntegrity = () => {
     if (blockchain.length === 0) return false;
     const sorted = [...blockchain].sort((a, b) => a.index - b.index);
     for (let i = 1; i < sorted.length; i++) {
-      if (sorted[i].previousHash !== sorted[i - 1].hash) return false;
+      const prevHash = sorted[i].previous_hash || sorted[i].previousHash;
+      if (prevHash !== sorted[i - 1].hash) return false;
     }
     return true;
   };
@@ -507,7 +579,7 @@ const AdminPanelPage = ({ apiBase, profile, logEcosystemActivity, navigateTo }) 
             <span className="badge badge-blue">{totalBlocks} blocks</span>
           </h3>
 
-          {blockchainLoading ? (
+          {blockchainLoading && blockchain.length === 0 ? (
             <div className="glass-card" style={{ padding: '40px', textAlign: 'center' }}>
               <div style={{ fontSize: '2rem', marginBottom: '10px' }} className="animate-float">⛓️</div>
               <div style={{ color: 'var(--text-muted)' }}>Memuat rantai blok dari ledger...</div>
@@ -624,7 +696,7 @@ const AdminPanelPage = ({ apiBase, profile, logEcosystemActivity, navigateTo }) 
                           </div>
                           <div>
                             <span style={{ color: 'var(--text-muted)' }}>PREV  </span>
-                            <span style={{ color: '#60a5fa', wordBreak: 'break-all' }}>{truncHash(block.previousHash)}</span>
+                            <span style={{ color: '#60a5fa', wordBreak: 'break-all' }}>{truncHash(block.previous_hash || block.previousHash)}</span>
                           </div>
                         </div>
 
@@ -1070,6 +1142,75 @@ const AdminPanelPage = ({ apiBase, profile, logEcosystemActivity, navigateTo }) 
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* INVESTMENT PROJECT APPROVALS BOARD */}
+      <div className="glass-card" style={{ padding: '24px', marginTop: '30px', width: '100%' }}>
+        <h3 style={{ fontSize: '1.25rem', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span>📋 Persetujuan Proyek Crowdfunding</span>
+          <span className="badge badge-purple">Admin Review</span>
+        </h3>
+
+        {projects.filter(p => p.status === 'pending').length === 0 ? (
+          <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem', textAlign: 'center', padding: '30px 0' }}>
+            Tidak ada proyek yang menunggu persetujuan saat ini.
+          </div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-muted)' }}>
+                  <th style={{ padding: '12px 8px' }}>Detail Proyek</th>
+                  <th style={{ padding: '12px 8px' }}>Target Modal</th>
+                  <th style={{ padding: '12px 8px' }}>ROI &amp; Tenor</th>
+                  <th style={{ padding: '12px 8px', textAlign: 'center' }}>Tindakan</th>
+                </tr>
+              </thead>
+              <tbody>
+                {projects.filter(p => p.status === 'pending').map((proj) => (
+                  <tr key={proj.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                    <td style={{ padding: '12px 8px' }}>
+                      <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                        <img src={proj.image} alt={proj.title} style={{ width: '50px', height: '50px', objectFit: 'cover', borderRadius: '4px' }} />
+                        <div>
+                          <strong style={{ fontSize: '0.95rem', color: '#fff' }}>{proj.title}</strong>
+                          <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '4px', maxWidth: '300px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {proj.description || 'Tidak ada deskripsi'}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td style={{ padding: '12px 8px', fontWeight: 700, color: 'var(--primary-green)' }}>
+                      Rp {Number(proj.target_amount).toLocaleString('id-ID')}
+                    </td>
+                    <td style={{ padding: '12px 8px' }}>
+                      <span style={{ color: '#fbbf24', fontWeight: 600 }}>{proj.estimated_roi}% / Thn</span>
+                      <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '2px' }}>{proj.duration_months} Bulan</div>
+                    </td>
+                    <td style={{ padding: '12px 8px' }}>
+                      <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                        <button
+                          className="btn btn-green"
+                          style={{ padding: '6px 12px', fontSize: '0.75rem', height: '30px', cursor: 'pointer' }}
+                          onClick={() => handleApproveProject(proj.id)}
+                        >
+                          ✓ Setujui
+                        </button>
+                        <button
+                          className="btn"
+                          style={{ padding: '6px 12px', fontSize: '0.75rem', height: '30px', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.2)', cursor: 'pointer' }}
+                          onClick={() => handleRejectProject(proj.id)}
+                        >
+                          ✗ Tolak
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </>
   );

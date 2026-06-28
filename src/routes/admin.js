@@ -9,6 +9,7 @@ const {
   updateSupplyChain,
   updateMemberByAdmin
 } = require('../controllers/adminController');
+const { approveProject, rejectProject } = require('../controllers/investorController');
 
 // Delphi Survey Management
 router.post('/delphi/create', createDelphiSurvey);
@@ -22,5 +23,9 @@ router.post('/supply-chain/update', updateSupplyChain);
 
 // Member Intervention Management
 router.post('/members/update', updateMemberByAdmin);
+
+// Investment Project Approval Management
+router.post('/projects/approve', approveProject);
+router.post('/projects/reject', rejectProject);
 
 module.exports = router;

@@ -22,6 +22,117 @@ const InvestorPage = ({ apiBase, profile, setProfile, navigateTo, subRoute }) =>
   const [newProjRoi, setNewProjRoi] = useState('');
   const [newProjImage, setNewProjImage] = useState('');
   const [adminProjMsg, setAdminProjMsg] = useState('');
+  const [sidebarTab, setSidebarTab] = useState('portfolio'); // 'portfolio' | 'create'
+
+  const renderProjectForm = (isAdmin) => (
+    <>
+      <h3 style={{ fontSize: '1.2rem', marginBottom: '16px', color: '#60a5fa', display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <span>🌱 {isAdmin ? 'Buat Proyek Baru' : 'Ajukan Proyek Baru'}</span>
+        <span className={`badge ${isAdmin ? 'badge-blue' : 'badge-purple'}`}>
+          {isAdmin ? 'Admin Power' : 'Proposal'}
+        </span>
+      </h3>
+
+      {adminProjMsg && (
+        <div style={{
+          background: 'rgba(16, 185, 129, 0.1)',
+          border: '1px solid var(--primary-green)',
+          padding: '10px',
+          borderRadius: '8px',
+          marginBottom: '16px',
+          fontSize: '0.8rem',
+          color: '#34d399',
+          fontWeight: 600
+        }}>{adminProjMsg}</div>
+      )}
+
+      <form onSubmit={handleCreateProject} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div className="form-group">
+          <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Judul Kampanye Proyek</label>
+          <input
+            type="text"
+            className="form-control"
+            style={{ height: '32px', fontSize: '0.8rem' }}
+            placeholder="Contoh: Pembibitan Cengkeh"
+            value={newProjTitle}
+            onChange={(e) => setNewProjTitle(e.target.value)}
+            required
+          />
+        </div>
+
+        <div className="form-group">
+          <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Target Pendanaan (Rp)</label>
+          <input
+            type="number"
+            className="form-control"
+            style={{ height: '32px', fontSize: '0.8rem' }}
+            placeholder="Contoh: 120000000"
+            value={newProjTarget}
+            onChange={(e) => setNewProjTarget(e.target.value)}
+            required
+          />
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+          <div className="form-group">
+            <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Tenor Kontrak</label>
+            <select
+              className="form-control"
+              style={{ height: '32px', fontSize: '0.8rem', background: '#0e1423' }}
+              value={newProjDuration}
+              onChange={(e) => setNewProjDuration(e.target.value)}
+            >
+              <option value="6">6 Bulan</option>
+              <option value="8">8 Bulan</option>
+              <option value="12">12 Bulan</option>
+              <option value="24">24 Bulan</option>
+            </select>
+          </div>
+          <div className="form-group">
+            <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Estimasi ROI (%)</label>
+            <input
+              type="number"
+              step="0.1"
+              className="form-control"
+              style={{ height: '32px', fontSize: '0.8rem' }}
+              placeholder="Contoh: 15.5"
+              value={newProjRoi}
+              onChange={(e) => setNewProjRoi(e.target.value)}
+              required
+            />
+          </div>
+        </div>
+
+        <div className="form-group">
+          <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Tautan Gambar Proyek (Optional)</label>
+          <input
+            type="text"
+            className="form-control"
+            style={{ height: '32px', fontSize: '0.8rem' }}
+            placeholder="https://images.unsplash..."
+            value={newProjImage}
+            onChange={(e) => setNewProjImage(e.target.value)}
+          />
+        </div>
+
+        <div className="form-group">
+          <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Deskripsi Proyek</label>
+          <textarea
+            className="form-control"
+            style={{ fontSize: '0.8rem', padding: '6px' }}
+            placeholder="Jelaskan penggunaan modal & prospek bisnis tani..."
+            rows="3"
+            value={newProjDesc}
+            onChange={(e) => setNewProjDesc(e.target.value)}
+          />
+        </div>
+
+        <button type="submit" className="btn btn-blue" style={{ width: '100%', fontWeight: 700, fontSize: '0.8rem', height: '34px', marginTop: '6px', cursor: 'pointer' }}>
+          {isAdmin ? '+ Rilis Kampanye Proyek' : '✉ Ajukan Proposal Proyek'}
+        </button>
+      </form>
+    </>
+  );
 
   const handleCreateProject = async (e) => {
     e.preventDefault();
@@ -41,7 +152,9 @@ const InvestorPage = ({ apiBase, profile, setProfile, navigateTo, subRoute }) =>
       });
       const result = await res.json();
       if (result.success) {
-        setAdminProjMsg('Proyek crowdfunding baru berhasil didaftarkan!');
+        setAdminProjMsg(profile?.status === 'Admin Koperasi' 
+          ? 'Proyek baru berhasil didaftarkan di system!' 
+          : 'Proposal proyek crowdfunding berhasil diajukan! Menunggu persetujuan admin.');
         setNewProjTitle('');
         setNewProjDesc('');
         setNewProjTarget('');
@@ -429,9 +542,11 @@ const InvestorPage = ({ apiBase, profile, setProfile, navigateTo, subRoute }) =>
           <h3 style={{ fontSize: '1.25rem', marginBottom: '16px' }}>Proyek Koperasi Terbuka (Crowdfunding)</h3>
           {loading && projects.length === 0 ? (
             <div style={{ color: 'var(--text-muted)' }}>Memuat daftar proyek...</div>
+          ) : projects.filter(proj => proj.status === 'funding' || proj.status === 'closed').length === 0 ? (
+            <div style={{ color: 'var(--text-muted)' }}>Belum ada proyek crowdfunding aktif saat ini.</div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              {projects.map((proj) => {
+              {projects.filter(proj => proj.status === 'funding' || proj.status === 'closed').map((proj) => {
                 const percent = Math.min(100, Math.round((Number(proj.raised_amount) / Number(proj.target_amount)) * 100));
                 return (
                   <div key={proj.id} className="glass-card" style={{
@@ -534,140 +649,78 @@ const InvestorPage = ({ apiBase, profile, setProfile, navigateTo, subRoute }) =>
         {/* RIGHT SIDEBAR: INVESTOR PORTFOLIO OR ADMIN PROJECT CREATOR */}
         <div className="glass-card" style={{ padding: '20px', position: 'sticky', top: '20px' }}>
           {profile?.status === 'Admin Koperasi' ? (
-            <>
-              <h3 style={{ fontSize: '1.2rem', marginBottom: '16px', color: '#60a5fa', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span>🌱 Buat Proyek Baru</span>
-                <span className="badge badge-blue">Admin Power</span>
-              </h3>
-
-              {adminProjMsg && (
-                <div style={{
-                  background: 'rgba(16, 185, 129, 0.1)',
-                  border: '1px solid var(--primary-green)',
-                  padding: '10px',
-                  borderRadius: '8px',
-                  marginBottom: '16px',
-                  fontSize: '0.8rem',
-                  color: '#34d399',
-                  fontWeight: 600
-                }}>{adminProjMsg}</div>
-              )}
-
-              <form onSubmit={handleCreateProject} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <div className="form-group">
-                  <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Judul Kampanye Proyek</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    style={{ height: '32px', fontSize: '0.8rem' }}
-                    placeholder="Contoh: Pembibitan Cengkeh"
-                    value={newProjTitle}
-                    onChange={(e) => setNewProjTitle(e.target.value)}
-                    required
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Target Pendanaan (Rp)</label>
-                  <input
-                    type="number"
-                    className="form-control"
-                    style={{ height: '32px', fontSize: '0.8rem' }}
-                    placeholder="Contoh: 120000000"
-                    value={newProjTarget}
-                    onChange={(e) => setNewProjTarget(e.target.value)}
-                    required
-                  />
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                  <div className="form-group">
-                    <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Tenor Kontrak</label>
-                    <select
-                      className="form-control"
-                      style={{ height: '32px', fontSize: '0.8rem', background: '#0e1423' }}
-                      value={newProjDuration}
-                      onChange={(e) => setNewProjDuration(e.target.value)}
-                    >
-                      <option value="6">6 Bulan</option>
-                      <option value="8">8 Bulan</option>
-                      <option value="12">12 Bulan</option>
-                      <option value="24">24 Bulan</option>
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Estimasi ROI (%)</label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      className="form-control"
-                      style={{ height: '32px', fontSize: '0.8rem' }}
-                      placeholder="Contoh: 15.5"
-                      value={newProjRoi}
-                      onChange={(e) => setNewProjRoi(e.target.value)}
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="form-group">
-                  <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Tautan Gambar Proyek (Optional)</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    style={{ height: '32px', fontSize: '0.8rem' }}
-                    placeholder="https://images.unsplash..."
-                    value={newProjImage}
-                    onChange={(e) => setNewProjImage(e.target.value)}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Deskripsi Proyek</label>
-                  <textarea
-                    className="form-control"
-                    style={{ fontSize: '0.8rem', padding: '6px' }}
-                    placeholder="Jelaskan penggunaan modal & prospek bisnis tani..."
-                    rows="3"
-                    value={newProjDesc}
-                    onChange={(e) => setNewProjDesc(e.target.value)}
-                  />
-                </div>
-
-                <button type="submit" className="btn btn-blue" style={{ width: '100%', fontWeight: 700, fontSize: '0.8rem', height: '34px', marginTop: '6px' }}>
-                  + Rilis Kampanye Proyek
-                </button>
-              </form>
-            </>
+            renderProjectForm(true)
           ) : (
             <>
-              <h3 style={{ fontSize: '1.2rem', marginBottom: '16px', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '8px' }}>
-                Investasi Aktif Anda
-              </h3>
-              {myInvestments.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-                  Anda belum menyalurkan investasi.<br />Pilih proyek pertanian aktif untuk memulai.
-                </div>
+              {/* Tabs for Member Sidebar */}
+              <div style={{ display: 'flex', gap: '4px', marginBottom: '16px', background: 'rgba(0,0,0,0.3)', padding: '4px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                <button 
+                  onClick={() => setSidebarTab('portfolio')}
+                  className="btn"
+                  style={{
+                    flex: 1,
+                    fontSize: '0.75rem',
+                    padding: '6px',
+                    borderRadius: '6px',
+                    background: sidebarTab === 'portfolio' ? 'rgba(255,255,255,0.08)' : 'transparent',
+                    color: sidebarTab === 'portfolio' ? '#fff' : 'var(--text-muted)',
+                    cursor: 'pointer',
+                    border: 'none'
+                  }}
+                >
+                  💼 Portofolio
+                </button>
+                <button 
+                  onClick={() => setSidebarTab('create')}
+                  className="btn"
+                  style={{
+                    flex: 1,
+                    fontSize: '0.75rem',
+                    padding: '6px',
+                    borderRadius: '6px',
+                    background: sidebarTab === 'create' ? 'rgba(255,255,255,0.08)' : 'transparent',
+                    color: sidebarTab === 'create' ? '#fff' : 'var(--text-muted)',
+                    cursor: 'pointer',
+                    border: 'none'
+                  }}
+                >
+                  🌱 Ajukan Proyek
+                </button>
+              </div>
+
+              {sidebarTab === 'create' ? (
+                renderProjectForm(false)
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                  {myInvestments.map((inv) => (
-                    <div key={inv.id} style={{
-                      paddingBottom: '12px',
-                      borderBottom: '1px solid rgba(255,255,255,0.05)'
-                    }}>
-                      <div style={{ fontSize: '0.85rem', fontWeight: 700, marginBottom: '4px' }}>
-                        {inv.investment_projects?.title || 'Proyek Tani'}
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                        <span>Pokok: Rp {Number(inv.amount).toLocaleString('id-ID')}</span>
-                        <span style={{ color: 'var(--primary-green)', fontWeight: 600 }}>Aktif</span>
-                      </div>
-                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-                        Tanggal: {new Date(inv.created_at || inv.createdAt).toLocaleDateString('id-ID')}
-                      </div>
+                <>
+                  <h3 style={{ fontSize: '1.2rem', marginBottom: '16px', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '8px' }}>
+                    Investasi Aktif Anda
+                  </h3>
+                  {myInvestments.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                      Anda belum menyalurkan investasi.<br />Pilih proyek pertanian aktif untuk memulai.
                     </div>
-                  ))}
-                </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                      {myInvestments.map((inv) => (
+                        <div key={inv.id} style={{
+                          paddingBottom: '12px',
+                          borderBottom: '1px solid rgba(255,255,255,0.05)'
+                        }}>
+                          <div style={{ fontSize: '0.85rem', fontWeight: 700, marginBottom: '4px' }}>
+                            {inv.investment_projects?.title || 'Proyek Tani'}
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                            <span>Pokok: Rp {Number(inv.amount).toLocaleString('id-ID')}</span>
+                            <span style={{ color: 'var(--primary-green)', fontWeight: 600 }}>Aktif</span>
+                          </div>
+                          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                            Tanggal: {new Date(inv.created_at || inv.createdAt).toLocaleDateString('id-ID')}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
               )}
             </>
           )}

@@ -5,6 +5,9 @@ const GovernancePage = ({ apiBase, profile, logEcosystemActivity }) => {
   const [votings, setVotings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [news, setNews] = useState([]);
+  const [newsLoading, setNewsLoading] = useState(false);
+  const [rightTab, setRightTab] = useState('announcements'); // 'announcements' | 'news'
 
   // Report Form state
   const [category, setCategory] = useState('Aspirasi');
@@ -17,17 +20,40 @@ const GovernancePage = ({ apiBase, profile, logEcosystemActivity }) => {
       setLoading(true);
       setError('');
       
-      const announceRes = await fetch(`${apiBase}/governance/announcements`);
-      const announceData = await announceRes.json();
+      // Fetch announcements
+      try {
+        const announceRes = await fetch(`${apiBase}/governance/announcements`);
+        const announceData = await announceRes.json();
+        if (announceData.success) {
+          setAnnouncements(announceData.data || []);
+        }
+      } catch (err) {
+        console.error('Error fetching announcements:', err);
+      }
 
-      const voteRes = await fetch(`${apiBase}/governance/votings`);
-      const voteData = await voteRes.json();
+      // Fetch votings
+      try {
+        const voteRes = await fetch(`${apiBase}/governance/votings`);
+        const voteData = await voteRes.json();
+        if (voteData.success) {
+          setVotings(voteData.data || []);
+        }
+      } catch (err) {
+        console.error('Error fetching votings:', err);
+      }
 
-      if (announceData.success && voteData.success) {
-        setAnnouncements(announceData.data);
-        setVotings(voteData.data);
-      } else {
-        setError('Gagal memuat data governance hub.');
+      // Fetch Google News
+      setNewsLoading(true);
+      try {
+        const newsRes = await fetch(`${apiBase}/governance/news`);
+        const newsData = await newsRes.json();
+        if (newsData.success) {
+          setNews(newsData.data || []);
+        }
+      } catch (err) {
+        console.error('Error fetching cooperative news:', err);
+      } finally {
+        setNewsLoading(false);
       }
     } catch (err) {
       setError('Gagal menghubungi backend.');
@@ -243,28 +269,118 @@ const GovernancePage = ({ apiBase, profile, logEcosystemActivity }) => {
           </div>
         </div>
 
-        {/* Right Side: Announcements list */}
+        {/* Right Side: Announcements & News Tabs */}
         <div className="glass-card" style={{ padding: '24px' }}>
-          <h3 style={{ fontSize: '1.2rem', marginBottom: '16px', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '8px' }}>
-            📢 Pengumuman Resmi Koperasi
-          </h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            {announcements.map((item) => (
-              <div key={item.id} style={{
-                paddingBottom: '16px',
-                borderBottom: '1px solid rgba(255,255,255,0.05)'
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                    📅 {new Date(item.date).toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' })}
-                  </span>
-                  <span className="badge badge-blue" style={{ fontSize: '0.6rem' }}>{item.author}</span>
-                </div>
-                <h4 style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: '6px', color: '#e2e8f0' }}>{item.title}</h4>
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', lineHeight: '1.4' }}>{item.content}</p>
-              </div>
-            ))}
+          <div style={{
+            display: 'flex',
+            gap: '4px',
+            background: 'rgba(0,0,0,0.3)',
+            padding: '4px',
+            borderRadius: '10px',
+            marginBottom: '20px',
+            border: '1px solid rgba(255,255,255,0.05)'
+          }}>
+            <button
+              onClick={() => setRightTab('announcements')}
+              className="btn"
+              style={{
+                flex: 1,
+                fontSize: '0.8rem',
+                padding: '8px',
+                borderRadius: '8px',
+                background: rightTab === 'announcements' ? 'rgba(255,255,255,0.07)' : 'transparent',
+                color: rightTab === 'announcements' ? '#fff' : 'var(--text-muted)',
+                cursor: 'pointer',
+                border: 'none'
+              }}
+            >
+              📢 Pengumuman
+            </button>
+            <button
+              onClick={() => setRightTab('news')}
+              className="btn"
+              style={{
+                flex: 1,
+                fontSize: '0.8rem',
+                padding: '8px',
+                borderRadius: '8px',
+                background: rightTab === 'news' ? 'rgba(255,255,255,0.07)' : 'transparent',
+                color: rightTab === 'news' ? '#fff' : 'var(--text-muted)',
+                cursor: 'pointer',
+                border: 'none'
+              }}
+            >
+              📰 Berita Terupdate
+            </button>
           </div>
+
+          {rightTab === 'announcements' ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              {announcements.length === 0 ? (
+                <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textAlign: 'center', padding: '20px 0' }}>Belum ada pengumuman resmi.</div>
+              ) : (
+                announcements.map((item) => (
+                  <div key={item.id} style={{
+                    paddingBottom: '16px',
+                    borderBottom: '1px solid rgba(255,255,255,0.05)'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                        📅 {new Date(item.date).toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' })}
+                      </span>
+                      <span className="badge badge-blue" style={{ fontSize: '0.6rem' }}>{item.author}</span>
+                    </div>
+                    <h4 style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: '6px', color: '#e2e8f0' }}>{item.title}</h4>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', lineHeight: '1.4' }}>{item.content}</p>
+                  </div>
+                ))
+              )}
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              {newsLoading && news.length === 0 ? (
+                <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textAlign: 'center', padding: '30px 0' }}>
+                  <div style={{ fontSize: '1.5rem', marginBottom: '8px' }} className="animate-spin">🔄</div>
+                  Mengambil berita koperasi terhangat...
+                </div>
+              ) : news.length === 0 ? (
+                <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textAlign: 'center', padding: '20px 0' }}>Gagal memuat berita saat ini.</div>
+              ) : (
+                news.map((item, idx) => (
+                  <div key={idx} style={{
+                    paddingBottom: '16px',
+                    borderBottom: '1px solid rgba(255,255,255,0.05)'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                        📅 {item.pubDate ? new Date(item.pubDate).toLocaleDateString('id-ID', { year: 'numeric', month: 'short', day: 'numeric' }) : 'Baru saja'}
+                      </span>
+                      <span className="badge badge-green" style={{ fontSize: '0.62rem', fontWeight: 700 }}>{item.source}</span>
+                    </div>
+                    <h4 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '8px', color: '#f1f5f9', lineHeight: '1.4' }}>{item.title}</h4>
+                    <a 
+                      href={item.link} 
+                      target="_blank" 
+                      rel="noopener noreferrer" 
+                      style={{ 
+                        color: '#60a5fa', 
+                        fontSize: '0.78rem', 
+                        fontWeight: 600, 
+                        textDecoration: 'none',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}
+                      onMouseOver={(e) => e.target.style.textDecoration = 'underline'}
+                      onMouseOut={(e) => e.target.style.textDecoration = 'none'}
+                    >
+                      Baca Selengkapnya <span>↗</span>
+                    </a>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

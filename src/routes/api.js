@@ -3,7 +3,6 @@ const router = express.Router();
 
 const membershipRoutes = require('./membership');
 const shopRoutes = require('./shop');
-const productsRoutes = require('./products');
 const financeRoutes = require('./finance');
 const governanceRoutes = require('./governance');
 const delphiRoutes = require('./delphi');
@@ -13,7 +12,6 @@ const investorRoutes = require('./investor');
 // Register modular routes
 router.use('/membership', membershipRoutes);
 router.use('/shop', shopRoutes);
-router.use('/products', productsRoutes);
 router.use('/finance', financeRoutes);
 router.use('/governance', governanceRoutes);
 router.use('/delphi', delphiRoutes);

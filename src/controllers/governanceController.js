@@ -155,10 +155,84 @@ const submitReport = (req, res, next) => {
   }
 };
 
+const https = require('https');
+
+const fetchRss = (url) => {
+  return new Promise((resolve, reject) => {
+    https.get(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36'
+      }
+    }, (res) => {
+      let data = '';
+      res.on('data', (chunk) => data += chunk);
+      res.on('end', () => resolve(data));
+    }).on('error', (err) => reject(err));
+  });
+};
+
+const parseGoogleNewsRss = (xmlString) => {
+  const items = [];
+  const itemRegex = /<item>([\s\S]*?)<\/item>/g;
+  let match;
+  
+  while ((match = itemRegex.exec(xmlString)) !== null) {
+    const itemContent = match[1];
+    
+    const titleMatch = itemContent.match(/<title>([\s\S]*?)<\/title>/);
+    const linkMatch = itemContent.match(/<link>([\s\S]*?)<\/link>/);
+    const pubDateMatch = itemContent.match(/<pubDate>([\s\S]*?)<\/pubDate>/);
+    const sourceMatch = itemContent.match(/<source[^>]*>([\s\S]*?)<\/source>/);
+    
+    let title = titleMatch ? titleMatch[1].trim() : 'No Title';
+    let link = linkMatch ? linkMatch[1].trim() : '#';
+    let pubDate = pubDateMatch ? pubDateMatch[1].trim() : '';
+    let source = sourceMatch ? sourceMatch[1].trim() : 'Google News';
+    
+    // Clean CDATA wrappers if present
+    title = title.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1');
+    link = link.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1');
+    source = source.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1');
+    
+    // Clean source from title: Google News title format is usually "Title - Source"
+    let cleanTitle = title;
+    const sourceDashIndex = title.lastIndexOf(' - ');
+    if (sourceDashIndex !== -1) {
+      cleanTitle = title.substring(0, sourceDashIndex).trim();
+    }
+    
+    items.push({
+      title: cleanTitle,
+      link,
+      pubDate,
+      source
+    });
+  }
+  
+  return items;
+};
+
+const getCooperativeNews = async (req, res, next) => {
+  try {
+    const url = 'https://news.google.com/rss/search?q=koperasi+indonesia&hl=id-ID&gl=ID&ceid=ID:id';
+    const xmlData = await fetchRss(url);
+    const newsItems = parseGoogleNewsRss(xmlData);
+
+    res.status(200).json({
+      success: true,
+      count: newsItems.length,
+      data: newsItems
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getAnnouncements,
   createAnnouncement,
   getVotings,
   castVote,
-  submitReport
+  submitReport,
+  getCooperativeNews
 };

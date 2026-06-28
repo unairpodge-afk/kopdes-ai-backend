@@ -10,7 +10,7 @@ const getProjects = async (req, res, next) => {
     const { data: projects, error } = await supabase
       .from('investment_projects')
       .select('*')
-      .order('created_at', { ascending: false });
+      .order('id', { ascending: false });
 
     if (error) throw new Error(error.message);
 
@@ -202,26 +202,98 @@ const createProject = async (req, res, next) => {
         duration_months: Number(durationMonths),
         estimated_roi: Number(estimatedRoi),
         image: image || 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?auto=format&fit=crop&q=80&w=400',
-        status: 'funding'
+        status: 'pending'
       });
 
     if (error) throw new Error(error.message);
 
-    // Record project creation to Blockchain Ledger
+    res.status(201).json({
+      success: true,
+      message: 'Project proposal submitted successfully',
+      data: newProject ? newProject[0] : null
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Approve a project (Admin only)
+const approveProject = async (req, res, next) => {
+  try {
+    const { projectId } = req.body;
+
+    if (!projectId) {
+      const error = new Error('Project ID wajib dilampirkan');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    // 1. Get project details to log to Blockchain
+    const { data: pList, error: pErr } = await supabase
+      .from('investment_projects')
+      .select('*')
+      .eq('id', projectId);
+
+    if (pErr || !pList || pList.length === 0) {
+      const error = new Error('Proyek investasi tidak ditemukan');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    const project = pList[0];
+
+    // 2. Update status to 'funding'
+    const { data, error } = await supabase
+      .from('investment_projects')
+      .update({ status: 'funding' })
+      .eq('id', projectId);
+
+    if (error) throw new Error(error.message);
+
+    // 3. Record project approval/creation to Blockchain Ledger
     const blockchain = require('../utils/blockchain');
     if (blockchain.addBlock) {
       blockchain.addBlock({
         type: "PROJECT_CREATION",
-        projectTitle: title,
-        targetAmount: Number(targetAmount),
-        message: `Kampanye Crowdfunding baru dirilis: ${title}`
+        projectTitle: project.title,
+        targetAmount: Number(project.target_amount),
+        message: `Kampanye Crowdfunding baru dirilis & disetujui: ${project.title}`
       });
     }
 
-    res.status(201).json({
+    res.status(200).json({
       success: true,
-      message: 'Project created successfully',
-      data: newProject ? newProject[0] : null
+      message: 'Proyek berhasil disetujui dan dirilis ke publik',
+      data: data ? data[0] : null
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Reject a project (Admin only)
+const rejectProject = async (req, res, next) => {
+  try {
+    const { projectId } = req.body;
+
+    if (!projectId) {
+      const error = new Error('Project ID wajib dilampirkan');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    // 1. Update status to 'rejected'
+    const { data, error } = await supabase
+      .from('investment_projects')
+      .update({ status: 'rejected' })
+      .eq('id', projectId);
+
+    if (error) throw new Error(error.message);
+
+    res.status(200).json({
+      success: true,
+      message: 'Proyek berhasil ditolak',
+      data: data ? data[0] : null
     });
   } catch (error) {
     next(error);
@@ -339,6 +411,8 @@ module.exports = {
   investInProject,
   getMyInvestments,
   createProject,
+  approveProject,
+  rejectProject,
   registerInvestor,
   getBlockchainLedger,
   logActivity

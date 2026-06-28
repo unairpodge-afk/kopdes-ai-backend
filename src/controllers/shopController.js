@@ -357,6 +357,175 @@ const getOrderHistory = async (req, res, next) => {
   }
 };
 
+const fs = require('fs');
+const path = require('path');
+const reviewsFilePath = path.join(__dirname, '..', 'data', 'reviews.json');
+
+// Helper to read local reviews
+const readLocalReviews = () => {
+  try {
+    if (!fs.existsSync(reviewsFilePath)) {
+      const dir = path.dirname(reviewsFilePath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      const initialReviews = [
+        { id: 'rev-1', product_id: 'p01', member_id: '1205 2024 0001', member_name: 'Budi Santoso', rating: 5, comment: 'Beras merahnya wangi banget dan pulen saat dimasak. Recomended!', created_at: new Date().toISOString() },
+        { id: 'rev-2', product_id: 'p01', member_id: '1205 2026 0002', member_name: 'Dewi Lestari', rating: 4, comment: 'Beras premium kualitas bagus, respon penjual cepat.', created_at: new Date().toISOString() },
+        { id: 'rev-3', product_id: 'p02', member_id: '1205 2024 0001', member_name: 'Budi Santoso', rating: 5, comment: 'Kopi Gayo mantap! Aromanya harum khas arabika asli.', created_at: new Date().toISOString() },
+        { id: 'rev-4', product_id: 'p03', member_id: '1205 2026 0002', member_name: 'Dewi Lestari', rating: 5, comment: 'Madu murni berkhasiat, badan jadi lebih segar setelah minum ini.', created_at: new Date().toISOString() }
+      ];
+      fs.writeFileSync(reviewsFilePath, JSON.stringify(initialReviews, null, 2), 'utf8');
+      return initialReviews;
+    }
+    const data = fs.readFileSync(reviewsFilePath, 'utf8');
+    return JSON.parse(data);
+  } catch (error) {
+    console.error('Gagal membaca data review lokal:', error);
+    return [];
+  }
+};
+
+// Helper to write local reviews
+const writeLocalReviews = (reviews) => {
+  try {
+    const dir = path.dirname(reviewsFilePath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(reviewsFilePath, JSON.stringify(reviews, null, 2), 'utf8');
+    return true;
+  } catch (error) {
+    console.error('Gagal menulis data review lokal:', error);
+    return false;
+  }
+};
+
+// Get reviews for a product
+const getReviews = async (req, res, next) => {
+  try {
+    const { productId } = req.query;
+    if (!productId) {
+      const error = new Error('Product ID wajib dilampirkan');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    // Try Supabase first
+    try {
+      const { data: reviews, error } = await supabase
+        .from('product_reviews')
+        .select('*')
+        .eq('product_id', productId)
+        .order('created_at', { ascending: false });
+
+      if (!error) {
+        return res.status(200).json({
+          success: true,
+          data: reviews || []
+        });
+      }
+      console.warn('Supabase product_reviews query failed, falling back to local JSON:', error.message);
+    } catch (dbErr) {
+      console.warn('Database connection failed, falling back to local JSON:', dbErr.message);
+    }
+
+    // Local JSON Fallback
+    const local = readLocalReviews();
+    const filtered = local.filter(r => r.product_id === productId);
+    res.status(200).json({
+      success: true,
+      data: filtered
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Add product review
+const addReview = async (req, res, next) => {
+  try {
+    const { productId, memberId, memberName, rating, comment } = req.body;
+
+    if (!productId || !memberName || !rating) {
+      const error = new Error('Product ID, Member Name, dan Rating wajib dilampirkan');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const newReview = {
+      product_id: productId,
+      member_id: memberId || null,
+      member_name: memberName,
+      rating: Number(rating),
+      comment: comment || '',
+      created_at: new Date().toISOString()
+    };
+
+    // Try Supabase first
+    try {
+      const { data, error } = await supabase
+        .from('product_reviews')
+        .insert({
+          product_id: productId,
+          member_id: memberId || null,
+          member_name: memberName,
+          rating: Number(rating),
+          comment: comment || ''
+        })
+        .select();
+
+      if (!error) {
+        return res.status(201).json({
+          success: true,
+          message: 'Ulasan berhasil ditambahkan ke database',
+          data: data && data.length > 0 ? data[0] : newReview
+        });
+      }
+      console.warn('Supabase product_reviews insert failed, falling back to local JSON:', error.message);
+    } catch (dbErr) {
+      console.warn('Database insert error, falling back to local JSON:', dbErr.message);
+    }
+
+    // Local JSON Fallback
+    const local = readLocalReviews();
+    const localReview = {
+      id: `rev-${Date.now()}`,
+      ...newReview
+    };
+    local.unshift(localReview);
+    writeLocalReviews(local);
+
+    res.status(201).json({
+      success: true,
+      message: 'Ulasan berhasil disimpan secara lokal',
+      data: localReview
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Get order items details
+const getOrderItems = async (req, res, next) => {
+  try {
+    const { orderId } = req.params;
+    const { data: items, error } = await supabase
+      .from('order_items')
+      .select('*')
+      .eq('order_id', orderId);
+
+    if (error) throw new Error(error.message);
+
+    res.status(200).json({
+      success: true,
+      data: items || []
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getShopProducts,
   getCart,
@@ -364,5 +533,9 @@ module.exports = {
   removeFromCart,
   clearCart,
   checkout,
-  getOrderHistory
+  getOrderHistory,
+  getReviews,
+  addReview,
+  getOrderItems
 };
+

@@ -1,23 +1,38 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import './App.css';
 
-// Import Pages
-import DashboardPage from './pages/DashboardPage';
-import MembershipPage from './pages/MembershipPage';
-import ShopPage from './pages/ShopPage';
-import InvestorPage from './pages/InvestorPage';
-import ProductsPage from './pages/ProductsPage';
-import FinancePage from './pages/FinancePage';
-import GovernancePage from './pages/GovernancePage';
-import DelphiSurveyPage from './pages/DelphiSurveyPage';
-import AdminPanelPage from './pages/AdminPanelPage';
-import PortalPage from './pages/PortalPage';
-import AITwinPage from './pages/AITwinPage';
-import CommandCenterPage from './pages/CommandCenterPage';
-import CommodityExchangePage from './pages/CommodityExchangePage';
-import KopdesPayPage from './pages/KopdesPayPage';
-import ESGScorecardPage from './pages/ESGScorecardPage';
-import RegisterPage from './pages/RegisterPage';
+// Lazy-loaded Pages (code-split per route)
+const DashboardPage = lazy(() => import('./pages/DashboardPage'));
+const MembershipPage = lazy(() => import('./pages/MembershipPage'));
+const ShopPage = lazy(() => import('./pages/ShopPage'));
+const InvestorPage = lazy(() => import('./pages/InvestorPage'));
+const FinancePage = lazy(() => import('./pages/FinancePage'));
+const GovernancePage = lazy(() => import('./pages/GovernancePage'));
+const DelphiSurveyPage = lazy(() => import('./pages/DelphiSurveyPage'));
+const AdminPanelPage = lazy(() => import('./pages/AdminPanelPage'));
+const PortalPage = lazy(() => import('./pages/PortalPage'));
+const AITwinPage = lazy(() => import('./pages/AITwinPage'));
+const CommandCenterPage = lazy(() => import('./pages/CommandCenterPage'));
+const CommodityExchangePage = lazy(() => import('./pages/CommodityExchangePage'));
+const KopdesPayPage = lazy(() => import('./pages/KopdesPayPage'));
+const ESGScorecardPage = lazy(() => import('./pages/ESGScorecardPage'));
+const RegisterPage = lazy(() => import('./pages/RegisterPage'));
+const KopdesUIDemo = lazy(() => import('./pages/KopdesUIDemo'));
+
+const PageLoader = () => (
+  <div style={{
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    height: '60vh', flexDirection: 'column', gap: '16px'
+  }}>
+    <div style={{
+      width: '40px', height: '40px', borderRadius: '50%',
+      border: '3px solid rgba(74, 222, 128, 0.15)',
+      borderTop: '3px solid var(--primary-green)',
+      animation: 'spin 0.8s linear infinite'
+    }} />
+    <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Memuat halaman...</span>
+  </div>
+);
 
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? 'http://localhost:5000/api/v1'
@@ -85,7 +100,7 @@ function App() {
       icon: '🛒',
       items: [
         { id: 'shop', label: 'Kopdes Shop', icon: '🛒' },
-        { id: 'products', label: 'Manajemen Produk', icon: '📦' },
+
         { id: 'exchange', label: 'Commodity Exchange (V3.0)', icon: '📈' }
       ]
     },
@@ -123,7 +138,7 @@ function App() {
   const hasAccess = (tabId) => {
     if (!profile) return false;
     const status = profile.status;
-    if (tabId === 'admin' || tabId === 'center' || tabId === 'products') {
+    if (tabId === 'admin' || tabId === 'center') {
       return status === 'Admin Koperasi';
     }
     if (tabId === 'governance' || tabId === 'pay') {
@@ -213,8 +228,6 @@ function App() {
         return <ShopPage apiBase={API_BASE} profile={profile} setProfile={setProfile} logEcosystemActivity={logEcosystemActivity} navigateTo={navigateTo} />;
       case 'investor':
         return <InvestorPage apiBase={API_BASE} profile={profile} setProfile={setProfile} navigateTo={navigateTo} subRoute={subRoute} logEcosystemActivity={logEcosystemActivity} />;
-      case 'products':
-        return <ProductsPage apiBase={API_BASE} profile={profile} logEcosystemActivity={logEcosystemActivity} />;
       case 'finance':
         return <FinancePage apiBase={API_BASE} profile={profile} setProfile={setProfile} logEcosystemActivity={logEcosystemActivity} />;
       case 'governance':
@@ -231,6 +244,8 @@ function App() {
         return <CommandCenterPage profile={profile} logEcosystemActivity={logEcosystemActivity} />;
       case 'exchange':
         return <CommodityExchangePage profile={profile} logEcosystemActivity={logEcosystemActivity} />;
+      case 'demo':
+        return <KopdesUIDemo />;
       case 'pay':
         return <KopdesPayPage profile={profile} setProfile={setProfile} apiBase={API_BASE} logEcosystemActivity={logEcosystemActivity} />;
       case 'esg':
@@ -241,7 +256,11 @@ function App() {
   };
 
   if (viewMode === 'portal') {
-    return <PortalPage setViewMode={setViewMode} apiBase={API_BASE} setProfile={setProfile} profile={profile} />;
+    return (
+      <Suspense fallback={<PageLoader />}>
+        <PortalPage setViewMode={setViewMode} apiBase={API_BASE} setProfile={setProfile} profile={profile} />
+      </Suspense>
+    );
   }
 
   return (
@@ -400,7 +419,9 @@ function App() {
         {/* Page Render */}
         <div className="workspace-area">
           <div className="page-container">
-            {hasAccess(activeTab) ? renderActivePage() : renderAccessDenied()}
+            <Suspense fallback={<PageLoader />}>
+              {hasAccess(activeTab) ? renderActivePage() : renderAccessDenied()}
+            </Suspense>
           </div>
         </div>
       </main>
